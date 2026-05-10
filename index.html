@@ -1320,7 +1320,6 @@ function openNewProduct(){
   renderSizeGrid('p-sizes-grid',[]);
   fillRicamoSelect();
   fillSupplierDropdowns();
-  pendingModalLogos=[...(p.logos||[])];renderModalLogosGrid(pendingModalLogos);
   $('modal-product').style.display='flex';
 }
 function renderSizeGrid(containerId, selected){
