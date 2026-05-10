@@ -413,6 +413,7 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
               <div style="display:flex;gap:8px;align-items:center">
                 <span id="pd-school" class="badge b-blue"></span>
                 <button class="btn btn-sm" id="pd-edit-btn" onclick="openEditProduct(currentProdId)">✏️ Modifica</button>
+                <button class="btn btn-sm" onclick="duplicateProduct(currentProdId)">⧉ Duplica</button>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
@@ -1359,7 +1360,7 @@ async function saveProduct(){
       await upsert('products',p.id,p);CM('modal-product');renderProdsTable();if(currentView==='product-detail')openProdDet(p.id);toast('✅ Prodotto aggiornato');
     }catch(e){toast('Errore salvataggio: '+e.message);}
   } else {
-    const p={id:'p'+Date.now(),desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,sizes,logos:[...pendingModalLogos],images:[],files:[]};
+    const p={id:'p'+Date.now(),desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,sizes,logos:[...pendingModalLogos],images:window._dupImages||[],files:[]};window._dupImages=null;
     if(!p.desc){alert('Inserisci una descrizione');return;}
     try{
       toast('Caricamento immagini…');
@@ -2158,6 +2159,39 @@ async function processRicamoImages(r){
     out.img=await uploadToStorage(out.img,'ricami');
   }
   return out;
+}
+
+
+// ── DUPLICA PRODOTTO ──────────────────────────────────────────────────────────
+function duplicateProduct(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  editingProductId=null;
+  $('prod-modal-title').textContent='Duplica prodotto';
+  $('prod-del-btn').style.display='none';
+  // Pre-fill all fields from existing product
+  const gv=(fid,val)=>{const el=$(fid);if(el)el.value=val||'';};
+  gv('p-desc',(p.desc||'')+(p.desc?' (copia)':''));
+  gv('p-art',p.article||'');gv('p-col',p.color||'');
+  gv('p-code',p.code||'');gv('p-uu',p.uu||'');
+  gv('p-sch',p.school||'');gv('p-custom',p.custom||'');
+  gv('p-notes',p.notes||'');
+  $('p-sup').value=p.supplier||'';
+  fillStampatoreSelect('p-dest',p.dest||'');
+  fillRicamoSelect();
+  $('p-ef-ricamo').value=p.embFrontRicamo||'';
+  $('p-eb-ricamo').value=p.embBackRicamo||'';
+  $('p-eo-ricamo').value=p.embOtherRicamo||'';
+  // Copy sizes
+  renderSizeGrid('p-sizes-grid',p.sizes||[]);
+  // Copy logos
+  pendingModalLogos=[...(p.logos||[])];
+  renderModalLogosGrid(pendingModalLogos);
+  // Copy images (will be shared references — OK since we compress on save)
+  // Store them temporarily so saveProduct can pick them up
+  window._dupImages=[...(p.images||[])];
+  fillSupplierDropdowns();
+  $('modal-product').style.display='flex';
+  toast('Prodotto duplicato — modifica i campi necessari e salva');
 }
 
 </script>
