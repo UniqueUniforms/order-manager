@@ -1,0 +1,1990 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Manager — Gestione Ordini</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#fff;--bg2:#f8fafc;--bg3:#f1f5f9;--txt:#0f172a;--txt2:#64748b;--txt3:#94a3b8;
+  --border:#e2e8f0;--border2:#cbd5e1;--accent:#2563eb;--accent-l:#eff6ff;--accent-t:#1e40af;
+  --ok-bg:#dcfce7;--ok-t:#166534;--warn-bg:#fef9c3;--warn-t:#854d0e;
+  --info-bg:#dbeafe;--info-t:#1e40af;--danger-bg:#fee2e2;--danger-t:#991b1b;
+  --orange-bg:#fff7ed;--orange-t:#c2410c;
+  --r:8px;--rl:12px;--sh:0 1px 4px rgba(0,0,0,.08);
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1e293b;--bg2:#0f172a;--bg3:#070d1a;--txt:#f1f5f9;--txt2:#94a3b8;--txt3:#475569;
+  --border:#334155;--border2:#475569;--accent-l:#1e3a5f;--accent-t:#93c5fd;
+  --ok-bg:#14532d;--ok-t:#86efac;--warn-bg:#713f12;--warn-t:#fde68a;
+  --info-bg:#1e3a5f;--info-t:#93c5fd;--danger-bg:#7f1d1d;--danger-t:#fca5a5;
+  --orange-bg:#431407;--orange-t:#fb923c;
+}}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:var(--bg3);color:var(--txt);font-size:14px;}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.login-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:40px 36px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.12);}
+.login-box h1{font-size:22px;font-weight:700;margin-bottom:4px;}
+.login-box p{font-size:13px;color:var(--txt2);margin-bottom:28px;}
+.login-err{font-size:13px;color:var(--danger-t);background:var(--danger-bg);padding:8px 12px;border-radius:var(--r);margin-bottom:12px;display:none;}
+.lg label{font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px;}
+.lg input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);font-size:14px;background:var(--bg);color:var(--txt);font-family:inherit;margin-bottom:16px;}
+.lg input:focus{outline:none;border-color:var(--accent);}
+.app{display:flex;height:100vh;}
+.sidebar{width:215px;background:var(--bg);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border);}
+.sidebar-logo h1{font-size:15px;font-weight:700;}
+.sync-row{display:flex;align-items:center;gap:6px;margin-top:6px;}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot-ok{background:#22c55e;}.dot-err{background:#ef4444;}.dot-load{background:#f59e0b;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.nav-sec{padding:14px 12px 4px;font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:.08em;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 12px;margin:1px 8px;border-radius:var(--r);cursor:pointer;font-size:13px;color:var(--txt2);transition:background .1s,color .1s;user-select:none;}
+.nav-item:hover{background:var(--bg2);color:var(--txt);}
+.nav-item.active{background:var(--accent-l);color:var(--accent-t);font-weight:600;}
+.ni{width:16px;height:16px;flex-shrink:0;opacity:.8;}
+.sfoot{margin-top:auto;padding:12px 14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;}
+.saving{font-size:11px;color:var(--txt3);display:none;align-items:center;gap:5px;}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{background:var(--bg);border-bottom:1px solid var(--border);padding:0 20px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.tbl{display:flex;align-items:center;gap:10px;}
+.topbar-title{font-size:15px;font-weight:700;}
+.back-btn{display:none;align-items:center;gap:4px;font-size:13px;color:var(--txt2);cursor:pointer;padding:5px 10px;border-radius:var(--r);border:1px solid var(--border);background:none;font-family:inherit;}
+.back-btn:hover{background:var(--bg2);}
+.tbr{display:flex;gap:8px;align-items:center;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);font-size:13px;cursor:pointer;border:1px solid var(--border2);background:var(--bg);color:var(--txt);font-family:inherit;transition:background .1s;}
+.btn:hover{background:var(--bg2);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-p:hover{background:#1d4ed8;}
+.btn-g{background:#059669;color:#fff;border-color:#059669;}
+.btn-g:hover{background:#047857;}
+.btn-r{background:var(--danger-bg);color:var(--danger-t);border-color:var(--danger-t);}
+.btn-sm{padding:4px 10px;font-size:12px;}
+.content{flex:1;overflow-y:auto;padding:20px;}
+.view{display:none;}.view.active{display:block;}
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.sc{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:16px;box-shadow:var(--sh);}
+.sc-l{font-size:11px;color:var(--txt2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;}
+.sc-v{font-size:24px;font-weight:700;}
+.sc-s{font-size:11px;color:var(--txt3);margin-top:3px;}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:16px;box-shadow:var(--sh);}
+.ch{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:var(--bg2);}
+.ct{font-size:14px;font-weight:700;}
+.fbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.fbar input,.fsel{font-size:13px;padding:6px 11px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);color:var(--txt);font-family:inherit;}
+.fbar input:focus,.fsel:focus{outline:none;border-color:var(--accent);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:var(--txt2);border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none;}
+th:hover{color:var(--txt);}
+td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr.click:hover td{background:var(--bg2);cursor:pointer;}
+.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap;}
+.b-green{background:var(--ok-bg);color:var(--ok-t);}
+.b-blue{background:var(--info-bg);color:var(--info-t);}
+.b-amber{background:var(--warn-bg);color:var(--warn-t);}
+.b-gray{background:var(--bg3);color:var(--txt2);}
+.b-red{background:var(--danger-bg);color:var(--danger-t);}
+.b-orange{background:var(--orange-bg);color:var(--orange-t);}
+.chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;background:var(--bg3);color:var(--txt2);border:1px solid var(--border);}
+
+/* Alert deadline */
+.deadline-alert{background:var(--orange-bg);border:1px solid var(--orange-t);border-radius:var(--rl);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;cursor:pointer;}
+.deadline-alert:hover{opacity:.9;}
+.da-icon{font-size:20px;flex-shrink:0;}
+.da-title{font-size:13px;font-weight:700;color:var(--orange-t);}
+.da-sub{font-size:12px;color:var(--orange-t);opacity:.8;}
+
+/* Gallery */
+.gallery-wrap{position:relative;width:100%;background:var(--bg2);border-radius:var(--r) var(--r) 0 0;overflow:hidden;}
+.gallery-main{width:100%;height:200px;object-fit:contain;display:block;background:var(--bg2);}
+.gallery-placeholder{width:100%;height:200px;display:flex;align-items:center;justify-content:center;background:var(--bg2);}
+.gallery-thumbs{display:flex;gap:6px;padding:8px;background:var(--bg2);border-top:1px solid var(--border);}
+.gallery-thumb{width:48px;height:48px;object-fit:contain;border-radius:5px;border:2px solid transparent;cursor:pointer;background:var(--bg3);}
+.gallery-thumb.active{border-color:var(--accent);}
+.gallery-add{width:48px;height:48px;border-radius:5px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--txt3);font-size:20px;flex-shrink:0;transition:border-color .15s;}
+.gallery-add:hover{border-color:var(--accent);color:var(--accent);}
+.gallery-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.35);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.gallery-nav.prev{left:8px;}.gallery-nav.next{right:8px;}
+.gallery-del{position:absolute;top:6px;right:6px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+
+/* Drop zone */
+.dropzone{border:2px dashed var(--border);border-radius:var(--r);padding:20px;text-align:center;color:var(--txt2);font-size:12px;cursor:pointer;transition:border-color .2s,background .2s;position:relative;}
+.dropzone:hover,.dropzone.over{border-color:var(--accent);background:var(--accent-l);color:var(--accent-t);}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+
+/* Product detail */
+.pdl{display:grid;grid-template-columns:260px 1fr;gap:16px;margin-bottom:16px;}
+.pdw{border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;background:var(--bg);}
+.pdm{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:18px;}
+.cpan,.fpan,.rpan{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:16px;margin-bottom:12px;}
+.cpan h3,.fpan h3,.rpan h3{font-size:13px;font-weight:700;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.crow{display:grid;grid-template-columns:140px 1fr;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);}
+.crow:last-child{border-bottom:none;}
+.ck{font-size:11px;color:var(--txt2);font-weight:700;padding-top:2px;text-transform:uppercase;letter-spacing:.04em;}
+.cv{font-size:13px;line-height:1.5;}
+.ctag{display:inline-block;font-family:monospace;font-size:11px;background:var(--info-bg);border:1px solid #bfdbfe;border-radius:4px;padding:2px 8px;color:var(--accent-t);font-weight:700;margin:1px 2px;}
+.color-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--border);margin-right:4px;vertical-align:middle;}
+.fitem{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;background:var(--bg2);}
+.fic{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.fi-ai{background:#ff9a00;color:#fff}.fi-pdf{background:#dc2626;color:#fff}.fi-png{background:#059669;color:#fff}.fi-jpg,.fi-jpeg{background:#2563eb;color:#fff}.fi-eps{background:#7c3aed;color:#fff}.fi-dst{background:#0891b2;color:#fff}.fi-other{background:var(--bg3);color:var(--txt2);}
+.fname{flex:1;font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fsz{font-size:11px;color:var(--txt3);}
+
+/* Ricamo card */
+.ricamo-card{border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;background:var(--bg);margin-bottom:12px;}
+.ricamo-card-body{padding:14px;display:grid;grid-template-columns:100px 1fr;gap:12px;align-items:start;}
+.ricamo-img{width:100px;height:100px;object-fit:contain;border-radius:var(--r);background:var(--bg2);border:1px solid var(--border);}
+.ricamo-img-placeholder{width:100px;height:100px;border-radius:var(--r);background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);}
+.ricamo-meta{display:flex;flex-direction:column;gap:4px;}
+.ricamo-name{font-size:14px;font-weight:700;}
+.ricamo-school{font-size:12px;color:var(--txt2);}
+.ricamo-code{font-family:monospace;font-size:12px;background:var(--info-bg);color:var(--accent-t);padding:2px 7px;border-radius:4px;display:inline-block;}
+.ricamo-price{font-size:13px;font-weight:700;color:var(--ok-t);}
+.color-dot-list{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;}
+.color-dot{width:16px;height:16px;border-radius:50%;border:1px solid var(--border);cursor:help;}
+
+/* Size checkboxes */
+.size-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.size-cb{display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:12px;user-select:none;transition:background .1s,border-color .1s;}
+.size-cb:hover{border-color:var(--accent);}
+.size-cb.on{background:var(--accent-l);border-color:var(--accent);color:var(--accent-t);font-weight:600;}
+
+/* Detail */
+.dh{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:16px;}
+.dmeta{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:16px;}
+.df label{font-size:11px;color:var(--txt2);display:block;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+.df span{font-size:13px;font-weight:700;}
+.sztbl{width:100%;border-collapse:collapse;font-size:12px;}
+.sztbl th{background:var(--bg2);padding:7px 10px;font-size:11px;font-weight:700;color:var(--txt2);border:1px solid var(--border);text-align:center;}
+.sztbl td{padding:8px 10px;border:1px solid var(--border);text-align:center;}
+.sztbl td.lc{text-align:left;font-weight:700;background:var(--bg2);}
+.sztbl td.tc{font-weight:700;background:var(--accent-l);color:var(--accent-t);}
+.note-panel{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:16px;margin-bottom:12px;}
+.note-panel h3{font-size:13px;font-weight:700;margin-bottom:10px;}
+.note-entry{border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;background:var(--bg2);}
+.ne-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.ne-date{font-size:11px;color:var(--txt3);}
+.ne-text{font-size:13px;line-height:1.6;}
+.note-add{display:flex;gap:8px;margin-top:8px;}
+.note-add textarea{flex:1;font-size:13px;padding:8px 11px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);color:var(--txt);font-family:inherit;resize:none;height:60px;}
+
+/* Modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding-top:40px;z-index:200;backdrop-filter:blur(3px);}
+.modal{background:var(--bg);border-radius:var(--rl);border:1px solid var(--border);width:700px;max-height:86vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+.modal-sm{width:520px;}
+.mh{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:1;}
+.mh h2{font-size:16px;font-weight:700;}
+.mc{cursor:pointer;font-size:20px;color:var(--txt2);background:none;border:none;line-height:1;padding:0 4px;}
+.mb{padding:22px;}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.fg{display:flex;flex-direction:column;gap:6px;}
+.fg.full{grid-column:1/-1;}
+.fg.third{grid-column:span 1;}
+.fg label{font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;}
+.fg input,.fg select,.fg textarea{font-size:13px;padding:8px 11px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);color:var(--txt);font-family:inherit;transition:border-color .15s;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--accent);}
+.fg textarea{resize:vertical;min-height:64px;}
+.slbl{font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 9px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.mf{border-top:1px solid var(--border);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;position:sticky;bottom:0;background:var(--bg);}
+.mf-r{display:flex;gap:8px;}
+.empty-msg{padding:48px;text-align:center;color:var(--txt2);font-size:13px;}
+.prow{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px;background:var(--bg2);}
+.xbtn{cursor:pointer;color:var(--danger-t);background:none;border:none;font-size:20px;flex-shrink:0;line-height:1;}
+
+/* Status item */
+.status-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;background:var(--bg2);}
+.status-color-pick{display:flex;gap:6px;flex-wrap:wrap;}
+.sc-opt{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid transparent;transition:border-color .15s;}
+.sc-opt.active{border-color:var(--txt);}
+
+/* Export */
+.exp-item{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:background .1s,border-color .1s;}
+.exp-item:hover{background:var(--bg2);}
+.exp-item.sel{border-color:var(--accent);background:var(--accent-l);}
+.spinner{display:none;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+/* Product search results */
+.prod-search-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:background .1s,border-color .1s;overflow:hidden;}
+.prod-search-item:hover{background:var(--accent-l);border-color:var(--accent);}
+.prod-search-thumb{width:44px;height:44px;flex-shrink:0;border-radius:6px;border:1px solid var(--border);background:var(--bg2);object-fit:contain;display:block;}
+.prod-search-placeholder{width:44px;height:44px;flex-shrink:0;border-radius:6px;border:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:18px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--txt);color:var(--bg);padding:11px 18px;border-radius:var(--r);font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;max-width:320px;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-box">
+    <h1>Order Manager</h1>
+    <p>Inserisci la password per accedere</p>
+    <div class="login-err" id="login-err">Password errata. Riprova.</div>
+    <div class="lg">
+      <label>Password</label>
+      <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="btn btn-p" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()">Accedi →</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app-screen" style="display:none">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Order Manager</h1>
+      <div class="sync-row">
+        <div class="dot dot-load" id="sync-dot"></div>
+        <span id="sync-lbl" style="font-size:11px;color:var(--txt3)">Connessione…</span>
+      </div>
+    </div>
+    <div class="nav-sec">Principale</div>
+    <div class="nav-item active" id="nav-dashboard" onclick="showView('dashboard',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.2" fill="currentColor" opacity=".9"/><rect x="9" y="1" width="6" height="6" rx="1.2" fill="currentColor" opacity=".5"/><rect x="1" y="9" width="6" height="6" rx="1.2" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="6" height="6" rx="1.2" fill="currentColor" opacity=".9"/></svg>Dashboard
+    </div>
+    <div class="nav-item" id="nav-orders" onclick="showView('orders',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="11" x2="9" y2="11" stroke="currentColor" stroke-width="1.3"/></svg>Ordini
+    </div>
+    <div class="nav-item" id="nav-products" onclick="showView('products',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="1" y="6" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6V4a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="10.5" r="1.2" fill="currentColor"/></svg>Catalogo
+    </div>
+    <div class="nav-item" id="nav-ricami" onclick="showView('ricami',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.3"/><path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></svg>Programmi Ricamo
+    </div>
+    <div class="nav-sec">Impostazioni</div>
+    <div class="nav-item" id="nav-statuses" onclick="showView('statuses',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="3" rx="1" fill="currentColor" opacity=".6"/><rect x="1" y="8" width="10" height="3" rx="1" fill="currentColor" opacity=".8"/><rect x="1" y="13" width="7" height="2" rx="1" fill="currentColor" opacity=".4"/></svg>Status ordini
+    </div>
+    <div class="nav-item" id="nav-stampatori" onclick="showView('stampatori',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="8" r="1" fill="currentColor"/></svg>Stampatori/Ricamatori
+    </div>
+    <div class="nav-item" id="nav-suppliers" onclick="showView('suppliers',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.3"/></svg>Fornitori
+    </div>
+    <div class="sfoot">
+      <div class="saving" id="saving"><div class="spinner" style="display:block;border-top-color:var(--accent);border-color:var(--border)"></div>Salvataggio…</div>
+      <button class="btn btn-sm" onclick="doLogout()" style="justify-content:center">Esci dall'account</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="tbl">
+        <button class="back-btn" id="back-btn" onclick="goBack()">← Indietro</button>
+        <span class="topbar-title" id="topbar-title">Dashboard</span>
+      </div>
+      <div class="tbr">
+        <button class="btn btn-p" id="export-ric-btn" onclick="exportRicamatore()" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Esporta
+        </button>
+        <button class="btn btn-p" id="main-btn" onclick="handleMain()">+ Nuovo ordine</button>
+      </div>
+    </header>
+    <main class="content">
+
+      <!-- DASHBOARD -->
+      <div class="view active" id="view-dashboard">
+        <div id="deadline-alerts"></div>
+        <div class="sgrid">
+          <div class="sc"><div class="sc-l">Ordini totali</div><div class="sc-v" id="s-tot">—</div><div class="sc-s">registrati</div></div>
+          <div class="sc"><div class="sc-l">In corso</div><div class="sc-v" id="s-act">—</div><div class="sc-s">da completare</div></div>
+          <div class="sc"><div class="sc-l">Fatturati</div><div class="sc-v" id="s-inv">—</div><div class="sc-s">chiusi</div></div>
+          <div class="sc"><div class="sc-l">Catalogo prodotti</div><div class="sc-v" id="s-pr">—</div><div class="sc-s">articoli</div></div>
+        </div>
+        <div class="card">
+          <div class="ch"><span class="ct">Ordini recenti</span><span style="font-size:12px;color:var(--txt2)">Clicca per aprire</span></div>
+          <table><thead><tr><th>Data</th><th>Deadline</th><th>N° Ordine</th><th>Fornitore</th><th>Cliente / Scuola</th><th>Descrizione</th><th>Pz.</th><th>Status</th></tr></thead>
+          <tbody id="dash-ords"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ORDINI -->
+      <div class="view" id="view-orders">
+        <div class="card">
+          <div class="ch">
+            <span class="ct">Tutti gli ordini</span>
+            <div class="fbar">
+              <input type="text" placeholder="Cerca…" id="ord-q" oninput="renderOrders()" style="width:190px">
+              <select class="fsel" id="ord-sup" onchange="renderOrders()"><option value="">Tutti i fornitori</option></select>
+              <select class="fsel" id="ord-sch" onchange="renderOrders()"><option value="">Tutti i clienti</option></select>
+              <select class="fsel" id="ord-sta" onchange="renderOrders()"><option value="">Tutti gli status</option></select>
+              <input type="date" id="ord-from" onchange="renderOrders()" title="Da data" style="width:130px">
+              <input type="date" id="ord-to" onchange="renderOrders()" title="A data" style="width:130px">
+              <button class="btn btn-sm" onclick="resetOrdFilters()">Reset</button>
+            </div>
+          </div>
+          <div id="ord-count" style="padding:8px 16px;font-size:12px;color:var(--txt2);border-bottom:1px solid var(--border);background:var(--bg2)"></div>
+          <table>
+            <thead><tr>
+              <th onclick="sortOrds('date')">Data <span id="sa-date"></span></th>
+              <th onclick="sortOrds('deadline')">Deadline <span id="sa-deadline"></span></th>
+              <th onclick="sortOrds('num')">N° Ordine <span id="sa-num"></span></th>
+              <th onclick="sortOrds('supplier')">Fornitore <span id="sa-supplier"></span></th>
+              <th onclick="sortOrds('school')">Cliente <span id="sa-school"></span></th>
+              <th onclick="sortOrds('desc')">Descrizione <span id="sa-desc"></span></th>
+              <th onclick="sortOrds('total')">Pz. <span id="sa-total"></span></th>
+              <th onclick="sortOrds('status')">Status <span id="sa-status"></span></th>
+              <th></th>
+            </tr></thead>
+            <tbody id="ords-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ORDER DETAIL -->
+      <div class="view" id="view-order-detail">
+        <div class="dh">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div style="flex:1"><div id="od-title" style="font-size:18px;font-weight:700"></div><div id="od-sup" style="font-size:13px;color:var(--txt2);margin-top:3px"></div></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+              <div id="od-status"></div>
+              <button class="btn btn-sm" onclick="openEditOrd()">✏️ Modifica</button>
+            </div>
+          </div>
+          <div class="dmeta">
+            <div class="df"><label>Data</label><span id="od-date">—</span></div>
+            <div class="df"><label>N° Ordine</label><span id="od-num">—</span></div>
+            <div class="df"><label>POM</label><span id="od-pom">—</span></div>
+            <div class="df"><label>Ferrara / KGS</label><span id="od-dest">—</span></div>
+            <div class="df"><label>Deadline</label><span id="od-deadline" style="color:var(--orange-t)">—</span></div>
+            <div class="df"><label>Alert anticipo</label><span id="od-alert-days">—</span></div>
+          </div>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <label style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Note ordine</label>
+            <div id="od-notes" style="font-size:13px;line-height:1.7;color:var(--txt2)">—</div>
+          </div>
+        </div>
+        <div class="note-panel">
+          <h3>💬 Note e aggiornamenti</h3>
+          <div id="od-thread"></div>
+          <div class="note-add">
+            <textarea id="note-input" placeholder="Aggiungi una nota o aggiornamento…"></textarea>
+            <button class="btn btn-p" onclick="addNote()" style="align-self:flex-end">Aggiungi</button>
+          </div>
+        </div>
+        <div id="od-prods"></div>
+      </div>
+
+      <!-- CATALOGO -->
+      <div class="view" id="view-products">
+        <div class="card">
+          <div class="ch">
+            <span class="ct">Catalogo prodotti</span>
+            <div class="fbar">
+              <input type="text" placeholder="Cerca prodotto, codice…" id="prod-q" oninput="renderProdsTable()" style="width:200px">
+              <select class="fsel" id="prod-sup" onchange="renderProdsTable()"><option value="">Tutti i fornitori</option></select>
+              <select class="fsel" id="prod-sch" onchange="renderProdsTable()"><option value="">Tutte le scuole</option></select>
+            </div>
+          </div>
+          <table><thead><tr><th>Img</th><th>Descrizione</th><th>Fornitore</th><th>Articolo</th><th>Colore</th><th>Taglie</th><th>Codice UU</th><th>Scuola</th><th>File</th><th></th></tr></thead>
+          <tbody id="prods-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- PRODUCT DETAIL -->
+      <div class="view" id="view-product-detail">
+        <div class="pdl">
+          <div class="pdw">
+            <div class="gallery-wrap" id="pd-gallery-wrap">
+              <div class="gallery-placeholder" id="pd-gallery-ph">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              </div>
+              <img class="gallery-main" id="pd-gallery-main" style="display:none" src="" alt="">
+              <button class="gallery-nav prev" id="pd-prev" onclick="galleryNav(-1)" style="display:none">‹</button>
+              <button class="gallery-nav next" id="pd-next" onclick="galleryNav(1)" style="display:none">›</button>
+              <button class="gallery-del" id="pd-del-img" onclick="deleteCurrentImg()" style="display:none" title="Elimina foto">×</button>
+            </div>
+            <div class="gallery-thumbs" id="pd-thumbs"></div>
+            <div style="padding:10px 12px">
+              <div class="dropzone" id="gallery-dropzone">
+                <div>📷 Trascina foto qui oppure clicca</div>
+                <div style="font-size:11px;margin-top:3px;color:var(--txt3)">Fino a 4 immagini (JPG/PNG)</div>
+                <input type="file" accept="image/*" multiple onchange="handleGalleryUpload(event)">
+              </div>
+            </div>
+          </div>
+          <div class="pdm">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+              <div><div id="pd-title" style="font-size:16px;font-weight:700"></div><div id="pd-sub" style="font-size:12px;color:var(--txt2);margin-top:3px"></div></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span id="pd-school" class="badge b-blue"></span>
+                <button class="btn btn-sm" id="pd-edit-btn" onclick="openEditProduct(currentProdId)">✏️ Modifica</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+              <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Fornitore</div><div id="pd-sup" style="font-weight:700"></div></div>
+              <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Articolo</div><div id="pd-art" style="font-weight:700"></div></div>
+              <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Colore</div><div id="pd-col" style="font-weight:700"></div></div>
+              <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Codice fornitore</div><div id="pd-code" style="font-weight:700;font-family:monospace;font-size:12px"></div></div>
+              <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Codice UU</div><div id="pd-uu" style="font-weight:700;font-family:monospace;font-size:12px"></div></div>
+              <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Ferrara / KGS</div><div id="pd-dest" style="font-weight:700"></div></div>
+            </div>
+            <div style="margin-top:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Taglie disponibili</div>
+              <div id="pd-sizes" style="font-size:13px"></div>
+            </div>
+            <div style="margin-top:12px;display:none" id="pd-notes-wrap">
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Note prodotto</div>
+              <div id="pd-prod-notes" style="font-size:13px;color:var(--txt2);line-height:1.6"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cpan"><h3>Personalizzazione</h3><div id="pd-custom"></div></div>
+        <div class="rpan" id="pd-ricamo-panel" style="display:none"><h3>Programma ricamo associato</h3><div id="pd-ricamo-content"></div></div>
+        <div class="fpan"><h3>🖼️ Immagini loghi / stampe</h3>
+          <div id="pd-logos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:10px"></div>
+          <div class="dropzone" id="logos-dropzone">📷 Trascina o clicca per aggiungere immagini loghi/stampe (JPG, PNG)<input type="file" multiple accept="image/*" onchange="uploadLogoImages(event)"></div>
+        </div>
+        <div class="fpan"><h3>📎 File tecnici</h3><div id="pd-files"></div>
+          <div class="dropzone" style="margin-top:8px">+ Trascina o clicca per allegare file (AI, EPS, PDF, DST…)<input type="file" multiple accept=".ai,.eps,.pdf,.png,.jpg,.jpeg,.svg,.zip,.dst,.pes" onchange="uploadFiles(event)"></div>
+        </div>
+      </div>
+
+      <!-- PROGRAMMI RICAMO -->
+      <div class="view" id="view-ricami">
+        <div class="card">
+          <div class="ch"><span class="ct">Programmi Ricamo</span><button class="btn btn-p" onclick="openNewRicamo()">+ Nuovo programma</button></div>
+          <div style="padding:16px" id="ricami-list"><div class="empty-msg">Nessun programma ricamo ancora.</div></div>
+        </div>
+      </div>
+
+      <!-- STATUS -->
+      <div class="view" id="view-statuses">
+        <div class="card">
+          <div class="ch"><span class="ct">Gestione status ordini</span><button class="btn btn-p" onclick="openNewStatus()">+ Nuovo status</button></div>
+          <div style="padding:16px" id="status-list"></div>
+        </div>
+      </div>
+
+      <!-- STAMPATORI -->
+      <div class="view" id="view-stampatori">
+        <div class="card">
+          <div class="ch">
+            <span class="ct">Stampatori / Ricamatori</span>
+            <button class="btn btn-p" onclick="addStampatore()">+ Aggiungi voce</button>
+          </div>
+          <div style="padding:16px" id="stampatori-list"></div>
+        </div>
+      </div>
+
+      <!-- FORNITORI -->
+      <div class="view" id="view-suppliers">
+        <div class="card">
+          <div class="ch">
+            <span class="ct">Anagrafiche fornitori</span>
+            <button class="btn btn-p" onclick="openNewSupplier()">+ Nuovo fornitore</button>
+          </div>
+          <div style="padding:16px" id="suppliers-list"><div class="empty-msg">Caricamento...</div></div>
+        </div>
+        <div class="card">
+          <div class="ch"><span class="ct">Riepilogo ordini per fornitore</span></div>
+          <table><thead><tr><th>Fornitore</th><th>N° ordini</th><th>Pezzi totali</th><th>Fatturati</th><th>In corso</th></tr></thead>
+          <tbody id="sup-tbody"></tbody></table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- EXPORT MODAL -->
+  <div class="ov" id="modal-export" style="display:none">
+    <div class="modal modal-sm">
+      <div class="mh"><h2>Esporta ordine in Excel</h2><button class="mc" onclick="CM('modal-export')">×</button></div>
+      <div class="mb">
+        <input type="text" placeholder="Cerca…" id="exp-q" oninput="renderExpList()" style="width:100%;margin-bottom:10px;padding:8px 11px;border-radius:var(--r);border:1px solid var(--border);font-family:inherit;font-size:13px;background:var(--bg);color:var(--txt)">
+        <div id="exp-list" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <div class="mf"><div></div><div class="mf-r">
+        <button class="btn" onclick="CM('modal-export')">Annulla</button>
+        <button class="btn btn-g" id="exp-btn" onclick="doExport()"><span id="exp-lbl">Scarica Excel</span><div class="spinner" id="exp-spin"></div></button>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ORDER MODAL -->
+  <div class="ov" id="modal-order" style="display:none">
+    <div class="modal">
+      <div class="mh"><h2 id="ord-modal-title">Nuovo ordine</h2><button class="mc" onclick="CM('modal-order')">×</button></div>
+      <div class="mb">
+        <div class="fgrid">
+          <div class="fg"><label>Data ordine</label><input type="date" id="o-date"></div>
+          <div class="fg"><label>N° Ordine fornitore</label><input type="text" id="o-num" placeholder="es. 26OV01381"></div>
+          <div class="fg"><label>Fornitore</label>
+            <select id="o-sup"><option value="">Seleziona…</option><option>Errea</option><option>Toptex</option><option>Actionwear</option><option>Gadgetmania</option><option>Rega</option><option>Tessilpolo</option><option>ElleEmme</option><option>Tee SRL</option><option>Sew What</option><option>Marketing Creation</option><option>Tagliotex</option><option>Agatex</option><option>Brook Taverner</option></select>
+          </div>
+          <div class="fg"><label>Cliente / Scuola</label><input type="text" id="o-school" placeholder="es. Tasis, Basel…"></div>
+          <div class="fg"><label>Descrizione</label><input type="text" id="o-desc" placeholder="es. Restock, Athletics…"></div>
+          <div class="fg"><label>N° POM</label><input type="text" id="o-pom"></div>
+          <div class="fg"><label>Status</label><select id="o-sta"></select></div>
+          <div class="fg"><label>Stampatore / Ricamatore</label>
+            <select id="o-dest"><option value="">—</option></select>
+          </div>
+          <div class="fg"><label>⏰ Deadline (facoltativa)</label><input type="date" id="o-deadline"></div>
+          <div class="fg"><label>Alert X giorni prima</label><input type="number" id="o-alert-days" min="1" max="30" placeholder="es. 7" value="7"></div>
+          <div class="fg full"><label>Note ordine</label><textarea id="o-notes" placeholder="Spedizioni, date, istruzioni…"></textarea></div>
+        </div>
+        <div class="slbl">Prodotti nell'ordine</div>
+        <div id="o-plist"></div>
+        <button class="btn btn-p" style="width:100%;margin-top:8px;justify-content:center" onclick="addPRow()">🔍 Cerca e aggiungi prodotto dal catalogo</button>
+        <button class="btn" style="width:100%;margin-top:6px;justify-content:center;color:var(--txt2)" onclick="addManualRow()">+ Aggiungi prodotto manuale (campione/nota)</button>
+      </div>
+      <div class="mf">
+        <button class="btn btn-r" id="ord-del-btn" style="display:none" onclick="delCurrentOrd()">🗑 Elimina</button>
+        <div class="mf-r">
+          <button class="btn" onclick="CM('modal-order')">Annulla</button>
+          <button class="btn btn-p" onclick="saveOrder()">Salva ordine</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT MODAL -->
+  <div class="ov" id="modal-product" style="display:none">
+    <div class="modal">
+      <div class="mh"><h2 id="prod-modal-title">Nuovo prodotto in catalogo</h2><button class="mc" onclick="CM('modal-product')">×</button></div>
+      <div class="mb">
+        <div class="fgrid">
+          <div class="fg full"><label>Descrizione</label><input type="text" id="p-desc" placeholder="es. TASIS t-shirt poliestere maschile blu"></div>
+          <div class="fg"><label>Fornitore</label>
+            <select id="p-sup"><option value="">Seleziona…</option><option>Errea</option><option>Toptex</option><option>Actionwear</option><option>Gadgetmania</option><option>Rega</option><option>Tessilpolo</option><option>ElleEmme</option><option>Tee SRL</option><option>Marketing Creation</option></select>
+          </div>
+          <div class="fg"><label>Nome articolo</label><input type="text" id="p-art" placeholder="es. Everton, Marion, K4010…"></div>
+          <div class="fg"><label>Colore</label><input type="text" id="p-col"></div>
+          <div class="fg"><label>Codice fornitore</label><input type="text" id="p-code"></div>
+          <div class="fg"><label>Codice UU (interno)</label><input type="text" id="p-uu"></div>
+          <div class="fg"><label>Scuola</label><input type="text" id="p-sch"></div>
+          <div class="fg"><label>Stampatore / Ricamatore</label>
+            <select id="p-dest"><option value="">—</option></select>
+          </div>
+          <div class="fg full">
+            <label>Taglie disponibili</label>
+            <div class="size-grid" id="p-sizes-grid"></div>
+          </div>
+          <div class="fg full"><label>Personalizzazione (descrizione)</label><textarea id="p-custom"></textarea></div>
+          <div class="fg full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+            <label>🖼️ Immagini loghi / stampe</label>
+            <div id="modal-logos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:8px;min-height:20px"></div>
+            <div class="dropzone" id="modal-logos-dropzone" style="padding:12px">📷 Carica immagini loghi/stampe (JPG, PNG)<input type="file" multiple accept="image/*" onchange="handleModalLogos(event)"></div>
+          </div>
+          <div class="fg full"><label>Fronte ricamo — programma associato</label><select id="p-ef-ricamo"><option value="">Nessuno</option></select></div>
+          <div class="fg full"><label>Retro ricamo — programma associato</label><select id="p-eb-ricamo"><option value="">Nessuno</option></select></div>
+          <div class="fg full"><label>Ricamo gamba / braccio — programma associato</label><select id="p-eo-ricamo"><option value="">Nessuno</option></select></div>
+          <div class="fg full"><label>Note prodotto</label><textarea id="p-notes" placeholder="Note interne sul prodotto…"></textarea></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn btn-r" id="prod-del-btn" style="display:none" onclick="delEditingProduct()">🗑 Elimina</button>
+        <div class="mf-r">
+          <button class="btn" onclick="CM('modal-product')">Annulla</button>
+          <button class="btn btn-p" onclick="saveProduct()">Salva prodotto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RICAMO MODAL -->
+  <div class="ov" id="modal-ricamo" style="display:none">
+    <div class="modal">
+      <div class="mh"><h2 id="ricamo-modal-title">Nuovo programma ricamo</h2><button class="mc" onclick="CM('modal-ricamo')">×</button></div>
+      <div class="mb">
+        <div class="fgrid">
+          <div class="fg"><label>Nome / codice programma</label><input type="text" id="r-name" placeholder="es. UNIFORM11B"></div>
+          <div class="fg"><label>Scuola di appartenenza</label><input type="text" id="r-school" placeholder="es. TASIS"></div>
+          <div class="fg full"><label>Immagine anteprima</label>
+            <div class="dropzone" id="r-img-box">📷 Trascina o clicca per caricare immagine<input type="file" accept="image/*" onchange="handleRicamoImg(event)"></div>
+            <img id="r-img-preview" style="display:none;width:100%;max-height:120px;object-fit:contain;margin-top:6px;border-radius:var(--r);border:1px solid var(--border)">
+          </div>
+          <div class="fg full"><label>File ricamo (.dst, .pes, .exp…)</label>
+            <div class="dropzone">📎 Trascina o clicca per caricare file ricamo<input type="file" accept=".dst,.pes,.exp,.jef,.vip,.vp3,.xxx,.hus" onchange="handleRicamoFile(event)"></div>
+            <div id="r-file-preview" style="margin-top:6px;font-size:12px;color:var(--ok-t)"></div>
+          </div>
+          <div class="fg full"><label>Codici colori filo (uno per riga, es. "Madeira 1234 — Rosso fuoco")</label><textarea id="r-colors" placeholder="Madeira 1234 — Rosso fuoco&#10;Madeira 5678 — Bianco ottico" style="min-height:80px"></textarea></div>
+          <div class="fg"><label>Prezzo ricamo (€)</label><input type="number" id="r-price" placeholder="es. 3.50" min="0" step="0.01"></div>
+          <div class="fg"><label>Note</label><input type="text" id="r-notes" placeholder="Note aggiuntive…"></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn btn-r" id="r-del-btn" style="display:none" onclick="delCurrentRicamo()">🗑 Elimina</button>
+        <div class="mf-r">
+          <button class="btn" onclick="CM('modal-ricamo')">Annulla</button>
+          <button class="btn btn-p" onclick="saveRicamo()">Salva programma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS MODAL -->
+  <div class="ov" id="modal-status" style="display:none">
+    <div class="modal modal-sm">
+      <div class="mh"><h2 id="st-modal-title">Nuovo status</h2><button class="mc" onclick="CM('modal-status')">×</button></div>
+      <div class="mb">
+        <div class="fgrid">
+          <div class="fg full"><label>Nome status</label><input type="text" id="st-name" placeholder="es. IN LAVORAZIONE"></div>
+          <div class="fg full"><label>Colore badge</label>
+            <div class="status-color-pick" id="st-color-pick">
+              <span class="sc-opt b-gray active" data-color="b-gray" onclick="pickColor(this)">Grigio</span>
+              <span class="sc-opt b-amber" data-color="b-amber" onclick="pickColor(this)">Giallo</span>
+              <span class="sc-opt b-blue" data-color="b-blue" onclick="pickColor(this)">Blu</span>
+              <span class="sc-opt b-green" data-color="b-green" onclick="pickColor(this)">Verde</span>
+              <span class="sc-opt b-red" data-color="b-red" onclick="pickColor(this)">Rosso</span>
+              <span class="sc-opt b-orange" data-color="b-orange" onclick="pickColor(this)">Arancione</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mf"><div></div><div class="mf-r">
+        <button class="btn" onclick="CM('modal-status')">Annulla</button>
+        <button class="btn btn-p" onclick="saveStatus()">Salva status</button>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+  <!-- PRODUCT SEARCH MODAL -->
+  <div class="ov" id="modal-prod-search" style="display:none">
+    <div class="modal modal-sm">
+      <div class="mh"><h2>Aggiungi prodotto dal catalogo</h2><button class="mc" onclick="CM('modal-prod-search')">×</button></div>
+      <div class="mb">
+        <input type="text" id="prod-search-input" placeholder="Scrivi nome, articolo, scuola, codice UU…"
+          oninput="renderProdSearchResults(this.value)"
+          style="width:100%;padding:10px 12px;border-radius:var(--r);border:1px solid var(--border);font-family:inherit;font-size:14px;background:var(--bg);color:var(--txt);margin-bottom:12px">
+        <div id="prod-search-results" style="max-height:380px;overflow-y:auto;overflow-x:hidden;">
+          <div style="font-size:13px;color:var(--txt2);text-align:center;padding:24px">Inizia a scrivere per cercare un prodotto</div>
+        </div>
+      </div>
+      <div class="mf"><div></div><div class="mf-r">
+        <button class="btn" onclick="CM('modal-prod-search')">Annulla</button>
+        <button class="btn" style="color:var(--txt2)" onclick="CM('modal-prod-search');addManualRow()">+ Nota manuale</button>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- SUPPLIER MODAL -->
+  <div class="ov" id="modal-supplier" style="display:none">
+    <div class="modal">
+      <div class="mh"><h2 id="sup-modal-title">Nuovo fornitore</h2><button class="mc" onclick="CM('modal-supplier')">×</button></div>
+      <div class="mb">
+        <div class="fgrid">
+          <div class="fg full"><label>Nome fornitore</label><input type="text" id="sf-name" placeholder="es. Errea"></div>
+          <div class="fg full"><label>Sito web</label><input type="text" id="sf-web" placeholder="es. https://www.errea.it"></div>
+          <div class="fg"><label>Email accesso IT</label><input type="text" id="sf-email-it" placeholder="email@esempio.it"></div>
+          <div class="fg"><label>Password accesso IT</label><input type="text" id="sf-pw-it" placeholder="Password IT"></div>
+          <div class="fg"><label>Email accesso CH</label><input type="text" id="sf-email-ch" placeholder="email@esempio.ch"></div>
+          <div class="fg"><label>Password accesso CH</label><input type="text" id="sf-pw-ch" placeholder="Password CH"></div>
+          <div class="fg"><label>Persona di contatto</label><input type="text" id="sf-contact" placeholder="Nome Cognome"></div>
+          <div class="fg"><label>Email contatto</label><input type="text" id="sf-contact-email" placeholder="contatto@esempio.it"></div>
+          <div class="fg full"><label>Telefono contatto</label><input type="text" id="sf-phone" placeholder="+39 000 0000000"></div>
+          <div class="fg full"><label>Note</label><textarea id="sf-notes" placeholder="Note generali sul fornitore…"></textarea></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn btn-r" id="sf-del-btn" style="display:none" onclick="delCurrentSupplier()">🗑 Elimina</button>
+        <div class="mf-r">
+          <button class="btn" onclick="CM('modal-supplier')">Annulla</button>
+          <button class="btn btn-p" onclick="saveSupplier()">Salva fornitore</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const SUPA_URL='https://subujcefeviclzrhscuh.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1YnVqY2VmZXZpY2x6cmhzY3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjQyMzYsImV4cCI6MjA5MjUwMDIzNn0.tWo0GsirLjFf7KYlM1fiO_q1JXgEl3E1P0Lgv8RXc6k';
+// ⚠️ CAMBIA QUESTA PASSWORD
+const APP_PW='UniqueUniforms2026!';
+
+const SIZE_CATS=[
+  {name:'Numeriche v1', sizes:['1/2','3/4','5/6','7/8','9/11','12/13']},
+  {name:'Numeriche v2', sizes:['2/4','6/8','8/10','10/12','12/14']},
+  {name:'Numeriche v3', sizes:['2','4','6','8','10','12','14']},
+  {name:'Lettere Junior', sizes:['3YXS','2YXS','YXS','XXS']},
+  {name:'Lettere Adulti', sizes:['XS','S','M','L','XL','XXL','3XL','4XL','5XL']},
+  {name:'Unica', sizes:['Unica']},
+];
+const ALL_SIZES=[...new Set(SIZE_CATS.flatMap(c=>c.sizes))];
+const DEFAULT_STATUSES=[
+  {id:'s1',name:'ORDINE CONFERMATO',color:'b-amber'},
+  {id:'s2',name:'SPEDITO A FERRARA',color:'b-amber'},
+  {id:'s3',name:'SPEDITO A KGS',color:'b-amber'},
+  {id:'s4',name:'SPEDITO A GUARISCO',color:'b-amber'},
+  {id:'s5',name:'SPEDITO AL CLIENTE FINALE',color:'b-blue'},
+  {id:'s6',name:'RICEVUTO',color:'b-blue'},
+  {id:'s7',name:'FATTURATO',color:'b-green'},
+];
+
+let db,products=[],orders=[],statuses=[],ricami=[];
+let currentView='dashboard',prevView='dashboard';
+let currentProdId=null,exportOrdId=null,currentOrdId=null,editingOrdId=null;
+let currentRicamoId=null,editingRicamoId=null,editingStatusId=null;
+let sortField='date',sortDir=-1;
+let galleryIndex=0;
+let pendingRicamoImg=null,pendingRicamoFile=null;
+let selectedStatusColor='b-gray';
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function doLogin(){
+  if(document.getElementById('login-pw').value===APP_PW){
+    sessionStorage.setItem('om_ok','1');
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app-screen').style.display='flex';
+    initApp();
+  } else {
+    document.getElementById('login-err').style.display='block';
+    document.getElementById('login-pw').value='';
+    document.getElementById('login-pw').focus();
+  }
+}
+function doLogout(){sessionStorage.removeItem('om_ok');location.reload();}
+document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+if(sessionStorage.getItem('om_ok')==='1'){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-screen').style.display='flex';
+  document.addEventListener('DOMContentLoaded',initApp);
+}
+
+// ── DB ────────────────────────────────────────────────────────────────────────
+async function initApp(){
+  setSS('load');
+  try{
+    db=supabase.createClient(SUPA_URL,SUPA_KEY);
+    await loadAll();
+    setSS('ok');
+    loadStampatoreOptions();
+    renderDashboard();
+    fillStatusSelects();
+    fillRicamoSelect();
+    fillSupplierDropdowns();
+  }catch(e){setSS('err');toast('Errore connessione: '+e.message);}
+}
+function setSS(s){
+  const d=document.getElementById('sync-dot'),l=document.getElementById('sync-lbl');
+  d.className='dot '+{ok:'dot-ok',err:'dot-err',load:'dot-load'}[s];
+  l.textContent={ok:'Connesso — dati live',err:'Errore connessione',load:'Connessione…'}[s];
+}
+async function loadAll(){
+  const [pr,or]=await Promise.all([db.from('products').select('*'),db.from('orders').select('*')]);
+  if(pr.error)throw pr.error;
+  if(or.error)throw or.error;
+  products=pr.data.map(r=>r.data);
+  orders=or.data.map(r=>r.data);
+  try{const st=await db.from('statuses').select('*');statuses=(st.data&&st.data.length)?st.data.map(r=>r.data):DEFAULT_STATUSES;}
+  catch(e){statuses=DEFAULT_STATUSES;}
+  try{const rc=await db.from('ricami').select('*');ricami=(rc.data&&rc.data.length)?rc.data.map(r=>r.data):[];}
+  catch(e){ricami=[];}
+  try{const sp=await db.from('suppliers_data').select('*');suppliersData=(sp.data&&sp.data.length)?sp.data.map(r=>r.data):[];}
+  catch(e){suppliersData=[];}
+}
+// Helper: get first image from a product (handles both old 'img' and new 'images[]' format)
+function getProdImg(p){
+  if(!p)return null;
+  if(p.images&&p.images.length)return p.images[0];
+  if(p.img)return p.img;
+  return null;
+}
+
+// Compress an image dataURL to max width and quality before saving
+function compressImg(dataUrl, maxW=800, quality=0.75){
+  return new Promise(resolve=>{
+    if(!dataUrl||!dataUrl.startsWith('data:image')){resolve(dataUrl);return;}
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg',quality));
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
+async function upsert(table,id,data){
+  setSaving(true);
+  const slim={...data};
+  if(slim.images)slim.images=await Promise.all(slim.images.map(i=>i?compressImg(i,800,0.7):null));slim.images=(slim.images||[]).filter(Boolean);
+  if(slim.img)slim.img=await compressImg(slim.img,800,0.7);
+  const {error}=await db.from(table).upsert({id,data:slim,updated_at:new Date().toISOString()});
+  setSaving(false);
+  if(error){toast('Errore salvataggio: '+error.message);throw error;}
+}
+async function del(table,id){
+  setSaving(true);
+  const {error}=await db.from(table).delete().eq('id',id);
+  setSaving(false);
+  if(error){toast('Errore: '+error.message);throw error;}
+}
+function setSaving(v){document.getElementById('saving').style.display=v?'flex':'none';}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const fmtDate=d=>{if(!d)return'—';const[y,m,dd]=d.split('-');return`${dd}/${m}/${y.slice(2)}`;};
+const calcTotal=o=>(o.products||[]).reduce((a,p)=>a+Object.values(p.sizes||{}).reduce((x,y)=>x+(+y||0),0),0);
+const pm=()=>Object.fromEntries(products.map(p=>[p.id,p]));
+const rm=()=>Object.fromEntries(ricami.map(r=>[r.id,r]));
+function toast(msg,ms=3000){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
+function sbadge(s){const st=statuses.find(x=>x.name===s)||{color:'b-gray'};return`<span class="badge ${st.color||'b-gray'}">${s||'—'}</span>`;}
+function CM(id){$(id).style.display='none';}
+function deadlineDays(d){if(!d)return null;const diff=Math.ceil((new Date(d)-new Date())/(1000*60*60*24));return diff;}
+document.querySelectorAll('.ov').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.style.display='none';}));
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function showView(v,el,skipH){
+  if(!skipH)prevView=currentView;
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  $('view-'+v).classList.add('active');
+  const nav=el||$('nav-'+v);if(nav)nav.classList.add('active');
+  currentView=v;
+  const titles={dashboard:'Dashboard',orders:'Ordini',products:'Catalogo prodotti',suppliers:'Fornitori',statuses:'Status ordini',stampatori:'Stampatori / Ricamatori',ricami:'Programmi Ricamo','order-detail':'Dettaglio ordine','product-detail':'Dettaglio prodotto'};
+  $('topbar-title').textContent=titles[v]||v;
+  $('back-btn').style.display=v.endsWith('-detail')?'flex':'none';
+  const ricBtn=$('export-ric-btn');if(ricBtn)ricBtn.style.display=(v==='order-detail')?'flex':'none';
+  const noMainBtn=['statuses','ricami','stampatori'];
+  $('main-btn').style.display=noMainBtn.includes(v)?'none':'flex';
+  $('main-btn').textContent=(v==='products'||v==='product-detail')?'+ Nuovo prodotto':'+ Nuovo ordine';
+  if(v==='dashboard')renderDashboard();
+  if(v==='orders'){renderOrders();fillOrdFilters();}
+  if(v==='products'){renderProdsTable();fillProdFilters();}
+  if(v==='suppliers'){if(!suppliersData.length)db.from('suppliers_data').select('*').then(r=>{if(r.data)suppliersData=r.data.map(x=>x.data);renderSuppliers();}).catch(()=>renderSuppliers());else renderSuppliers();}
+  if(v==='statuses')renderStatuses();
+  if(v==='stampatori')renderStampatori();
+  if(v==='ricami')renderRicami();
+}
+function goBack(){showView(prevView,$('nav-'+prevView));}
+function handleMain(){
+  if(currentView==='products'||currentView==='product-detail') openNewProduct();
+  else openNewOrder();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function renderDashboard(){
+  $('s-tot').textContent=orders.length;
+  $('s-act').textContent=orders.filter(o=>!['FATTURATO','RICEVUTO'].includes(o.status)).length;
+  $('s-inv').textContent=orders.filter(o=>o.status==='FATTURATO').length;
+  $('s-pr').textContent=products.length;
+  // Deadline alerts
+  const alerts=orders.filter(o=>{
+    if(!o.deadline||['FATTURATO','RICEVUTO'].includes(o.status))return false;
+    const days=deadlineDays(o.deadline);
+    const threshold=o.alertDays||7;
+    return days!==null&&days<=threshold&&days>=0;
+  }).sort((a,b)=>a.deadline.localeCompare(b.deadline));
+  $('deadline-alerts').innerHTML=alerts.map(o=>{
+    const days=deadlineDays(o.deadline);
+    return`<div class="deadline-alert" onclick="openOrdDet('${o.id}')">
+      <div class="da-icon">⏰</div>
+      <div><div class="da-title">${days===0?'SCADE OGGI':'Scade tra '+days+' giorn'+(days===1?'o':'i')} — ${o.school}${o.desc?' — '+o.desc:''}</div>
+      <div class="da-sub">${o.supplier} · ${fmtDate(o.deadline)} · ${sbadge(o.status)}</div></div>
+    </div>`;
+  }).join('');
+  const recent=[...orders].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+  $('dash-ords').innerHTML=recent.length?recent.map(o=>{
+    const days=o.deadline?deadlineDays(o.deadline):null;
+    const dlCell=o.deadline?`<span style="font-size:12px;color:${days<=3?'var(--danger-t)':days<=7?'var(--orange-t)':'var(--txt2)'}">${fmtDate(o.deadline)}</span>`:'<span style="color:var(--txt3)">—</span>';
+    return`<tr class="click" onclick="openOrdDet('${o.id}')">
+      <td style="color:var(--txt2);white-space:nowrap">${fmtDate(o.date)}</td>
+      <td>${dlCell}</td>
+      <td style="font-size:12px;color:var(--txt2)">${o.num||'—'}</td>
+      <td><span class="chip">${o.supplier}</span></td>
+      <td style="font-weight:700">${o.school}</td>
+      <td style="font-size:12px;color:var(--txt2)">${o.desc||'—'}</td>
+      <td style="text-align:center">${calcTotal(o)}</td>
+      <td>${sbadge(o.status)}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="8" class="empty-msg">Nessun ordine ancora.</td></tr>';
+}
+
+// ── ORDERS ────────────────────────────────────────────────────────────────────
+function resetOrdFilters(){['ord-q','ord-sup','ord-sch','ord-sta','ord-from','ord-to'].forEach(id=>{const el=$(id);if(el)el.value='';});renderOrders();}
+function sortOrds(f){if(sortField===f)sortDir*=-1;else{sortField=f;sortDir=f==='date'?-1:1;}document.querySelectorAll('[id^="sa-"]').forEach(e=>e.textContent='');const arr=$('sa-'+f);if(arr)arr.textContent=sortDir===1?' ↑':' ↓';renderOrders();}
+function renderOrders(){
+  const q=($('ord-q')||{}).value?.toLowerCase()||'',sup=($('ord-sup')||{}).value||'',sch=($('ord-sch')||{}).value||'',sta=($('ord-sta')||{}).value||'';
+  const from=($('ord-from')||{}).value||'',to=($('ord-to')||{}).value||'';
+  const map=pm();
+  let list=orders.filter(o=>{
+    const m=!q||[o.num,o.school,o.desc,o.supplier].some(x=>x?.toLowerCase().includes(q));
+    return m&&(!sup||o.supplier===sup)&&(!sch||o.school===sch)&&(!sta||o.status===sta)&&(!from||o.date>=from)&&(!to||o.date<=to);
+  });
+  list.sort((a,b)=>{let va,vb;if(sortField==='total'){va=calcTotal(a);vb=calcTotal(b);}else{va=a[sortField]||'';vb=b[sortField]||'';}return va<vb?-sortDir:va>vb?sortDir:0;});
+  $('ord-count').textContent=`${list.length} ordini trovati`;
+  $('ords-tbody').innerHTML=list.length?list.map(o=>{
+    const days=o.deadline?deadlineDays(o.deadline):null;
+    const dlCell=o.deadline?`<span style="font-size:12px;color:${days<=3?'var(--danger-t)':days<=7?'var(--orange-t)':'var(--txt2)'}">${fmtDate(o.deadline)}${days<=7&&days>=0?' ('+days+'g)':''}</span>`:'<span style="color:var(--txt3)">—</span>';
+    return`<tr class="click" onclick="openOrdDet('${o.id}')">
+      <td style="white-space:nowrap;color:var(--txt2)">${fmtDate(o.date)}</td>
+      <td>${dlCell}</td>
+      <td style="font-size:12px;color:var(--txt2)">${o.num||'—'}</td>
+      <td><span class="chip">${o.supplier}</span></td>
+      <td style="font-weight:700">${o.school}</td>
+      <td style="font-size:12px;color:var(--txt2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.desc||'—'}</td>
+      <td style="text-align:center">${calcTotal(o)}</td>
+      <td>${sbadge(o.status)}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-sm" onclick="event.stopPropagation();openEditOrdById('${o.id}')">✏️</button>
+        <button class="btn btn-sm" onclick="event.stopPropagation();delOrdById('${o.id}')">×</button>
+      </td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="9" class="empty-msg">Nessun ordine trovato</td></tr>';
+}
+function fillOrdFilters(){
+  $('ord-sup').innerHTML='<option value="">Tutti i fornitori</option>'+[...new Set(orders.map(o=>o.supplier))].sort().map(s=>`<option>${s}</option>`).join('');
+  $('ord-sch').innerHTML='<option value="">Tutti i clienti</option>'+[...new Set(orders.map(o=>o.school))].sort().map(s=>`<option>${s}</option>`).join('');
+  fillStatusSelects();
+}
+
+// ── ORDER DETAIL ──────────────────────────────────────────────────────────────
+function openOrdDet(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  currentOrdId=id;exportOrdId=id;prevView=currentView;
+  $('od-title').textContent=(o.school||'—')+(o.desc?' — '+o.desc:'');
+  $('od-sup').textContent=o.supplier;
+  $('od-status').innerHTML=sbadge(o.status);
+  $('od-date').textContent=fmtDate(o.date);
+  $('od-num').textContent=o.num||'—';
+  $('od-pom').textContent=o.pom||'—';
+  $('od-dest').textContent=o.dest||'—';
+  $('od-notes').textContent=o.notes||'—';
+  if(o.deadline){
+    const days=deadlineDays(o.deadline);
+    $('od-deadline').textContent=fmtDate(o.deadline)+(days>=0?' (tra '+days+' giorni)':' (SCADUTO)');
+    $('od-deadline').style.color=days<=3?'var(--danger-t)':days<=7?'var(--orange-t)':'var(--txt)';
+  } else $('od-deadline').textContent='—';
+  $('od-alert-days').textContent=o.alertDays?o.alertDays+' giorni prima':'—';
+  renderThread(o);renderOrdProds(o);
+  showView('order-detail',null,true);
+}
+function renderThread(o){
+  const thread=o.thread||[];
+  $('od-thread').innerHTML=thread.length?thread.map(n=>`<div class="note-entry"><div class="ne-hdr"><span style="font-size:12px;font-weight:700">📝 Nota</span><span class="ne-date">${n.date||''}</span></div><div class="ne-text">${n.text}</div></div>`).join(''):'<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nessuna nota ancora.</div>';
+}
+async function addNote(){
+  const text=$('note-input').value.trim();if(!text)return;
+  const o=orders.find(x=>x.id===currentOrdId);if(!o)return;
+  if(!o.thread)o.thread=[];
+  const now=new Date();
+  const ds=`${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  o.thread.push({text,date:ds});
+  $('note-input').value='';
+  try{await upsert('orders',o.id,o);renderThread(o);toast('Nota aggiunta');}
+  catch(e){}
+}
+function renderOrdProds(o){
+  const map=pm(),rmap=rm();
+  $('od-prods').innerHTML=(o.products||[]).map(pr=>{
+    // Manual product row
+    if(pr.manual){
+      return`<div class="card" style="margin-bottom:14px">
+        <div class="ch" style="background:var(--accent-l)">
+          <div><div style="font-size:13px;font-weight:700;color:var(--accent-t)">📝 Prodotto manuale / campione</div>
+          <div style="font-size:13px;margin-top:2px;color:var(--txt)">${pr.note||'—'}</div></div>
+        </div>
+      </div>`;
+    }
+    const p=map[pr.pid]||{};const sz=pr.sizes||{};
+    const used=Object.keys(sz).filter(s=>+sz[s]>0);
+    if(!used.length&&!pr.manual)return'';
+    const tot=used.reduce((a,s)=>a+(+sz[s]||0),0);
+    const codes=[];
+    if(p.embFront)codes.push(`Fronte: <span class="ctag">${p.embFront}</span>`);
+    if(p.embBack)codes.push(`Retro: <span class="ctag">${p.embBack}</span>`);
+    if(p.embOther)codes.push(`Gamba/braccio: <span class="ctag">${p.embOther}</span>`);
+    if(p.embCap)codes.push(`Cap retro: <span class="ctag">${p.embCap}</span>`);
+    const firstImg=getProdImg(p);
+    return`<div class="card" style="margin-bottom:14px">
+      <div class="ch">
+        <div style="display:flex;align-items:center;gap:12px">
+          ${firstImg?`<img src="${firstImg}" style="width:48px;height:48px;object-fit:contain;border-radius:7px;border:1px solid var(--border);background:var(--bg2)">`:''}
+          <div><div style="font-size:14px;font-weight:700;cursor:pointer" onclick="openProdDet('${pr.pid}')">${p.desc||'Prodotto'}</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:2px">${p.supplier||''} · ${p.article||''} · ${p.color||''}</div></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center"><span class="chip">${p.dest||'—'}</span><strong>${tot} pz.</strong></div>
+      </div>
+      <div style="overflow-x:auto"><table class="sztbl">
+        <thead><tr><th style="text-align:left">Articolo</th>${used.map(s=>`<th>${s}</th>`).join('')}<th>Tot</th></tr></thead>
+        <tbody><tr><td class="lc">${p.article||'—'} ${p.color||''}</td>${used.map(s=>`<td>${+sz[s]||0}</td>`).join('')}<td class="tc">${tot}</td></tr></tbody>
+      </table></div>
+      ${p.custom||codes.length?`<div style="padding:10px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--txt2);line-height:2">
+        ${p.custom?`<div style="margin-bottom:4px">${p.custom}</div>`:''}
+        ${codes.join(' &nbsp;')}
+        ${p.printNote?`<span class="chip" style="margin-left:6px">${p.printNote}</span>`:''}
+        ${p.ricamoId&&rmap[p.ricamoId]?`<span style="margin-left:8px">🧵 ${rmap[p.ricamoId].name} · €${rmap[p.ricamoId].price||'—'}</span>`:''}
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+function openEditOrd(){openEditOrdById(currentOrdId);}
+function openEditOrdById(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  editingOrdId=id;
+  $('ord-modal-title').textContent='Modifica ordine';
+  $('ord-del-btn').style.display='flex';
+  fillStatusSelects();fillStampatoreSelect('o-dest',o.dest||'');fillSupplierDropdowns();
+  $('o-date').value=o.date||'';$('o-num').value=o.num||'';$('o-sup').value=o.supplier||'';
+  $('o-school').value=o.school||'';$('o-desc').value=o.desc||'';$('o-pom').value=o.pom||'';
+  $('o-sta').value=o.status||'';fillStampatoreSelect('o-dest',o.dest||'');$('o-notes').value=o.notes||'';
+  $('o-deadline').value=o.deadline||'';$('o-alert-days').value=o.alertDays||7;
+  orderRows=(o.products||[]).map(p=>({pid:p.pid,sizes:{...p.sizes}}));
+  renderOrderRows();$('modal-order').style.display='flex';
+}
+function openNewOrder(){
+  editingOrdId=null;$('ord-modal-title').textContent='Nuovo ordine';$('ord-del-btn').style.display='none';
+  fillStatusSelects();fillStampatoreSelect('o-dest');fillSupplierDropdowns();
+  $('o-date').value=new Date().toISOString().split('T')[0];
+  ['o-num','o-school','o-desc','o-pom','o-notes','o-deadline'].forEach(id=>{$(id).value='';});
+  $('o-alert-days').value=7;$('o-sup').value='';$('o-dest').value='';
+  orderRows=[];renderOrderRows();$('modal-order').style.display='flex';
+}
+async function delCurrentOrd(){if(!editingOrdId||!confirm('Eliminare?'))return;try{await del('orders',editingOrdId);orders=orders.filter(o=>o.id!==editingOrdId);CM('modal-order');renderOrders();renderDashboard();toast('Ordine eliminato');}catch(e){}}
+async function delOrdById(id){if(!confirm('Eliminare?'))return;try{await del('orders',id);orders=orders.filter(o=>o.id!==id);renderOrders();renderDashboard();toast('Ordine eliminato');}catch(e){}}
+
+// ── ORDER ROWS ────────────────────────────────────────────────────────────────
+let orderRows=[];
+function renderOrderRows(){
+  const c=$('o-plist');if(!c)return;
+  if(!orderRows.length){c.innerHTML='<div style="font-size:13px;color:var(--txt2);padding:8px 0">Nessun prodotto aggiunto.</div>';return;}
+  const map=pm();
+  c.innerHTML=orderRows.map((r,i)=>{
+    if(r.manual){
+      return`<div class="prow" style="align-items:center">
+        <div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--accent-t)">📝 Prodotto manuale / campione</div>
+        <div style="font-size:13px;margin-top:2px">${r.note}</div></div>
+        <button class="xbtn" onclick="rmRow(${i})">×</button>
+      </div>`;
+    }
+    const p=map[r.pid]||{};
+    const availSizes=(p.sizes&&p.sizes.length)?p.sizes:ALL_SIZES;
+    const firstImg=getProdImg(p);
+    return`<div class="prow" style="flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          ${firstImg?`<img src="${firstImg}" style="width:36px;height:36px;object-fit:contain;border-radius:5px;background:var(--bg2);border:1px solid var(--border)">`:''}
+          <div><div style="font-size:13px;font-weight:700">${p.desc||'—'}</div>
+          <div style="font-size:11px;color:var(--txt2)">${p.supplier||''} · ${p.article||''} · ${p.color||''}</div></div>
+        </div><button class="xbtn" onclick="rmRow(${i})">×</button>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${availSizes.map(s=>`<div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:10px;color:var(--txt2)">${s}</span><input type="number" min="0" style="width:38px;text-align:center;padding:4px 2px;border:1px solid var(--border);border-radius:4px;font-family:inherit" value="${r.sizes[s]||0}" onchange="updSz(${i},'${s}',this.value)"></div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+function updSz(i,s,v){orderRows[i].sizes[s]=+v||0;}
+function rmRow(i){orderRows.splice(i,1);renderOrderRows();}
+async function saveOrder(){
+  const gv=id=>$(id)?.value||'';
+  if(!gv('o-sup')||!gv('o-school')){alert('Compila fornitore e cliente');return;}
+  const prods=orderRows.map(r=>r.manual?{manual:true,note:r.note,sizes:{}}:{pid:r.pid,sizes:Object.fromEntries(Object.entries(r.sizes).filter(([,v])=>v>0))});
+  if(editingOrdId){
+    const o=orders.find(x=>x.id===editingOrdId);if(!o)return;
+    Object.assign(o,{date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods});
+    try{await upsert('orders',o.id,o);CM('modal-order');if(currentView==='orders')renderOrders();if(currentView==='dashboard')renderDashboard();if(currentView==='order-detail')openOrdDet(editingOrdId);toast('✅ Ordine aggiornato');}catch(e){}
+  } else {
+    const o={id:'o'+Date.now(),date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods,thread:[]};
+    try{await upsert('orders',o.id,o);orders.unshift(o);CM('modal-order');if(currentView==='dashboard')renderDashboard();if(currentView==='orders')renderOrders();toast('✅ Ordine salvato');}catch(e){}
+  }
+}
+
+// ── GALLERY ───────────────────────────────────────────────────────────────────
+function renderGallery(p){
+  const imgs=p.images||[];
+  galleryIndex=Math.min(galleryIndex,Math.max(0,imgs.length-1));
+  const main=$('pd-gallery-main'),ph=$('pd-gallery-ph');
+  const prev=$('pd-prev'),next=$('pd-next'),delBtn=$('pd-del-img');
+  if(imgs.length>0){
+    main.src=imgs[galleryIndex];main.style.display='block';ph.style.display='none';
+    prev.style.display=imgs.length>1?'flex':'none';
+    next.style.display=imgs.length>1?'flex':'none';
+    delBtn.style.display='flex';
+  } else {
+    main.style.display='none';ph.style.display='flex';
+    prev.style.display='none';next.style.display='none';delBtn.style.display='none';
+  }
+  const thumbs=$('pd-thumbs');
+  thumbs.innerHTML=imgs.map((img,i)=>`<img class="gallery-thumb ${i===galleryIndex?'active':''}" src="${img}" onclick="gallerySelect(${i})" draggable="true" data-idx="${i}" title="Trascina per riordinare">`).join('');
+  if(imgs.length<4){thumbs.innerHTML+=`<label class="gallery-add" title="Aggiungi foto">+<input type="file" accept="image/*" multiple style="display:none" onchange="handleGalleryUpload(event)"></label>`;}
+  // Drag to reorder
+  thumbs.querySelectorAll('.gallery-thumb').forEach(el=>{
+    el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.idx);el.style.opacity='.4';});
+    el.addEventListener('dragend',e=>{el.style.opacity='1';});
+    el.addEventListener('dragover',e=>{e.preventDefault();el.style.outline='2px solid var(--accent)';});
+    el.addEventListener('dragleave',e=>{el.style.outline='';});
+    el.addEventListener('drop',async e=>{
+      e.preventDefault();el.style.outline='';
+      const from=+e.dataTransfer.getData('text/plain'),to=+el.dataset.idx;
+      if(from===to)return;
+      const p2=products.find(x=>x.id===currentProdId);if(!p2)return;
+      const moved=p2.images.splice(from,1)[0];
+      p2.images.splice(to,0,moved);
+      galleryIndex=to;
+      try{await upsert('products',p2.id,p2);renderGallery(p2);toast('Ordine immagini aggiornato');}catch(er){}
+    });
+  });
+}
+function galleryNav(dir){
+  const p=products.find(x=>x.id===currentProdId);if(!p||!p.images)return;
+  galleryIndex=(galleryIndex+dir+p.images.length)%p.images.length;
+  renderGallery(p);
+}
+function gallerySelect(i){galleryIndex=i;const p=products.find(x=>x.id===currentProdId);if(p)renderGallery(p);}
+async function deleteCurrentImg(){
+  const p=products.find(x=>x.id===currentProdId);if(!p||!p.images)return;
+  if(!confirm('Eliminare questa foto?'))return;
+  p.images.splice(galleryIndex,1);
+  galleryIndex=Math.max(0,galleryIndex-1);
+  try{await upsert('products',p.id,p);renderGallery(p);toast('Foto eliminata');}catch(e){}
+}
+async function handleGalleryUpload(e){
+  const files=Array.from(e.target.files);
+  e.target.value='';
+  await handleGalleryFiles(files);
+}
+async function handleGalleryFiles(files){
+  const p=products.find(x=>x.id===currentProdId);if(!p)return;
+  if(!p.images)p.images=[];
+  const toAdd=files.slice(0,4-p.images.length);
+  if(!toAdd.length){toast('Massimo 4 immagini per prodotto');return;}
+  let done=0;
+  toAdd.forEach(f=>{
+    const r=new FileReader();r.onload=async ev=>{
+      p.images.push(ev.target.result);
+      if(++done===toAdd.length){
+        galleryIndex=p.images.length-1;
+        try{await upsert('products',p.id,p);renderGallery(p);toast('Foto aggiunta');}catch(er){}
+      }
+    };r.readAsDataURL(f);
+  });
+}
+// Drag & drop for gallery — fires handleGalleryUpload directly, no input event
+document.addEventListener('DOMContentLoaded',()=>{
+  const dz=document.getElementById('gallery-dropzone');
+  if(dz){
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+    dz.addEventListener('drop',e=>{
+      e.preventDefault();dz.classList.remove('over');
+      handleGalleryFiles(Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')));
+    });
+  }
+  // Logos dropzone in product detail
+  ['logos-dropzone','modal-logos-dropzone'].forEach(id=>{
+    const ldz=document.getElementById(id);
+    if(!ldz)return;
+    ldz.addEventListener('dragover',e=>{e.preventDefault();ldz.classList.add('over');});
+    ldz.addEventListener('dragleave',()=>ldz.classList.remove('over'));
+    ldz.addEventListener('drop',e=>{
+      e.preventDefault();ldz.classList.remove('over');
+      const fi=ldz.querySelector('input[type=file]');if(!fi)return;
+      const dt=new DataTransfer();
+      Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')).forEach(f=>dt.items.add(f));
+      fi.files=dt.files;fi.dispatchEvent(new Event('change'));
+    });
+  });
+});
+
+// ── PRODUCT DETAIL ────────────────────────────────────────────────────────────
+function openProdDet(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  currentProdId=id;prevView=currentView;galleryIndex=0;
+  if(!p.images||!p.images.length){p.images=p.img?[p.img]:[];}
+  $('pd-title').textContent=p.desc;$('pd-sub').textContent=p.supplier+' · '+p.article;
+  $('pd-school').textContent=p.school||'—';$('pd-sup').textContent=p.supplier||'—';
+  $('pd-art').textContent=p.article||'—';$('pd-col').textContent=p.color||'—';
+  $('pd-code').textContent=p.code||'—';$('pd-uu').textContent=p.uu||'—';$('pd-dest').textContent=p.dest||'—';
+  $('pd-sizes').textContent=(p.sizes&&p.sizes.length)?p.sizes.join(', '):'Tutte le taglie';
+  // Show notes if present
+  const notesEl=$('pd-prod-notes');
+  if(notesEl){if(p.notes){notesEl.textContent=p.notes;$('pd-notes-wrap').style.display='block';}else{$('pd-notes-wrap').style.display='none';}}
+  renderGallery(p);
+  const codes=[];
+  if(p.embFront)codes.push({k:'Fronte ricamo',v:p.embFront,rid:p.embFrontRicamo});
+  if(p.embBack)codes.push({k:'Retro ricamo',v:p.embBack,rid:p.embBackRicamo});
+  if(p.embOther)codes.push({k:'Ricamo gamba/braccio',v:p.embOther,rid:p.embOtherRicamo});
+  if(p.embCap)codes.push({k:'Retro cappellino',v:p.embCap,rid:null});
+  if(p.printNote)codes.push({k:'Tecnica',v:p.printNote,rid:null});
+  const rmap=rm();
+  $('pd-custom').innerHTML=(p.custom?`<div class="crow"><div class="ck">Descrizione</div><div class="cv">${p.custom}</div></div>`:'')+codes.map(c=>{
+    const ric=c.rid?rmap[c.rid]:null;
+    return`<div class="crow"><div class="ck">${c.k}</div><div class="cv"><span class="ctag">${c.v}</span>${ric?` <span style="font-size:11px;color:var(--txt2)">→ ${ric.name}${ric.price?' · €'+ric.price:''}</span>`:''}${ric&&ric.fileData?` <button class="btn btn-sm" style="margin-left:6px" onclick="dlFile('${ric.fileName||'ricamo'}','${ric.fileData}')">📎 File</button>`:''}</div></div>`;
+  }).join('')||'<div style="font-size:13px;color:var(--txt2)">Nessuna personalizzazione.</div>';
+  // pannello ricamo principale (primo trovato)
+  const mainRicId=p.embFrontRicamo||p.embBackRicamo||p.embOtherRicamo;
+  if(mainRicId&&rmap[mainRicId]){
+    const ric=rmap[mainRicId];
+    $('pd-ricamo-panel').style.display='block';
+    $('pd-ricamo-content').innerHTML=`<div style="display:flex;gap:12px;align-items:start">
+      ${ric.img?`<img src="${ric.img}" style="width:80px;height:80px;object-fit:contain;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2)">`:`<div style="width:80px;height:80px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3)">🧵</div>`}
+      <div><div style="font-size:14px;font-weight:700">${ric.name}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:2px">${ric.school||'—'}</div>
+      ${ric.price?`<div style="font-size:13px;font-weight:700;color:var(--ok-t);margin-top:4px">€ ${ric.price}</div>`:''}
+      ${ric.colors?`<div style="margin-top:6px;font-size:12px;color:var(--txt2)">${ric.colors.split('\n').map(c=>`<div>${c}</div>`).join('')}</div>`:''}
+      ${ric.fileData?`<button class="btn btn-sm" style="margin-top:6px" onclick="dlFile('${ric.fileName||'ricamo'}','${ric.fileData}')">📎 Scarica file ricamo</button>`:''}
+      </div></div>`;
+  } else $('pd-ricamo-panel').style.display='none';
+  renderFilesList(p);
+  renderLogosGrid(p,'pd-logos-grid');
+  showView('product-detail',null,true);
+}
+function renderFilesList(p){
+  const c=$('pd-files');
+  if(!p.files||!p.files.length){c.innerHTML='<div style="font-size:12px;color:var(--txt2);margin-bottom:6px">Nessun file allegato.</div>';return;}
+  const em={'ai':'fi-ai','pdf':'fi-pdf','png':'fi-png','jpg':'fi-jpg','jpeg':'fi-jpeg','eps':'fi-eps','dst':'fi-dst','pes':'fi-dst','exp':'fi-dst'};
+  c.innerHTML=p.files.map((f,i)=>{const ext=(f.name.split('.').pop()||'').toLowerCase();return`<div class="fitem"><div class="fic ${em[ext]||'fi-other'}">${ext.toUpperCase()}</div><div style="flex:1;min-width:0"><div class="fname">${f.name}</div><div class="fsz">${f.size||''}</div></div><div style="display:flex;gap:4px">${f.dataUrl?`<button class="btn btn-sm" onclick="dlFile('${f.name}','${f.dataUrl}')">Scarica</button>`:''}<button class="btn btn-sm" onclick="rmFile('${p.id}',${i})">×</button></div></div>`;}).join('');
+}
+async function uploadFiles(e){
+  const p=products.find(x=>x.id===currentProdId);if(!p)return;if(!p.files)p.files=[];
+  let done=0;const total=e.target.files.length;
+  Array.from(e.target.files).forEach(f=>{
+    const r=new FileReader();r.onload=async ev=>{
+      const kb=Math.round(f.size/1024);
+      p.files.push({name:f.name,size:kb>1024?`${(kb/1024).toFixed(1)} MB`:`${kb} KB`,dataUrl:ev.target.result});
+      if(++done===total){try{await upsert('products',p.id,p);renderFilesList(p);toast('File salvato');}catch(er){}}
+    };r.readAsDataURL(f);
+  });e.target.value='';
+}
+async function rmFile(pid,idx){const p=products.find(x=>x.id===pid);if(!p)return;p.files.splice(idx,1);await upsert('products',p.id,p);renderFilesList(p);}
+function dlFile(name,dataUrl){const a=document.createElement('a');a.href=dataUrl;a.download=name;a.click();}
+
+// ── CATALOG TABLE ─────────────────────────────────────────────────────────────
+function renderProdsTable(){
+  const q=($('prod-q')||{}).value?.toLowerCase()||'',sup=($('prod-sup')||{}).value||'',sch=($('prod-sch')||{}).value||'';
+  const list=products.filter(p=>{const m=!q||[p.desc,p.uu,p.code,p.article].some(x=>x?.toLowerCase().includes(q));return m&&(!sup||p.supplier===sup)&&(!sch||p.school===sch);});
+  $('prods-tbody').innerHTML=list.length?list.map(p=>{
+    const firstImg=getProdImg(p);
+    return`<tr class="click" onclick="openProdDet('${p.id}')">
+    <td>${firstImg?`<img src="${firstImg}" style="width:38px;height:38px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:var(--bg2)">`:`<div style="width:38px;height:38px;background:var(--bg2);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>`}</td>
+    <td style="font-weight:700;max-width:180px">${p.desc}</td>
+    <td><span class="chip">${p.supplier||'—'}</span></td>
+    <td>${p.article||'—'}</td><td>${p.color||'—'}</td>
+    <td style="font-size:11px;color:var(--txt2)">${(p.sizes&&p.sizes.length)?p.sizes.slice(0,4).join(', ')+(p.sizes.length>4?'…':''):'Tutte'}</td>
+    <td style="font-size:12px;font-family:monospace">${p.uu||'—'}</td>
+    <td><span class="badge b-blue" style="font-size:11px">${p.school||'—'}</span></td>
+    <td>${p.files&&p.files.length?`<span class="chip">📎 ${p.files.length}</span>`:''}</td>
+    <td><button class="btn btn-sm" onclick="event.stopPropagation();delProdById('${p.id}')">×</button></td>
+  </tr>`;}).join(''):'<tr><td colspan="10" class="empty-msg">Nessun prodotto trovato</td></tr>';
+}
+function fillProdFilters(){
+  $('prod-sup').innerHTML='<option value="">Tutti i fornitori</option>'+[...new Set(products.map(p=>p.supplier).filter(Boolean))].sort().map(s=>`<option>${s}</option>`).join('');
+  $('prod-sch').innerHTML='<option value="">Tutte le scuole</option>'+[...new Set(products.map(p=>p.school).filter(Boolean))].sort().map(s=>`<option>${s}</option>`).join('');
+}
+
+// ── NEW PRODUCT ───────────────────────────────────────────────────────────────
+function openNewProduct(){
+  editingProductId=null;
+  $('prod-modal-title').textContent='Nuovo prodotto in catalogo';
+  $('prod-del-btn').style.display='none';
+  ['p-desc','p-art','p-col','p-code','p-uu','p-sch','p-custom','p-notes'].forEach(id=>{if($(id))$(id).value='';}); pendingModalLogos=[];renderModalLogosGrid([]);
+  ['p-ef-ricamo','p-eb-ricamo','p-eo-ricamo'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  $('p-sup').value='';
+  fillStampatoreSelect('p-dest');
+  renderSizeGrid('p-sizes-grid',[]);
+  fillRicamoSelect();
+  fillSupplierDropdowns();
+  pendingModalLogos=[...(p.logos||[])];renderModalLogosGrid(pendingModalLogos);
+  $('modal-product').style.display='flex';
+}
+function renderSizeGrid(containerId, selected){
+  const c=$(containerId);if(!c)return;
+  c.innerHTML=SIZE_CATS.map(cat=>`
+    <div style="margin-bottom:10px;width:100%">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em">${cat.name}</span>
+        <button type="button" class="btn btn-sm" style="padding:2px 8px;font-size:11px" onclick="toggleCategory('${cat.name}','${containerId}')">Seleziona tutto</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${cat.sizes.map(s=>`<div class="size-cb ${selected.includes(s)?'on':''}" data-cat="${cat.name}" data-size="${s}" onclick="toggleSizeCb(this)">${s}</div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+function toggleSizeCb(el){el.classList.toggle('on');}
+function toggleCategory(catName, containerId){
+  const cat=SIZE_CATS.find(c=>c.name===catName);if(!cat)return;
+  const c=$(containerId);
+  const els=c.querySelectorAll(`[data-cat="${catName}"]`);
+  const allOn=[...els].every(e=>e.classList.contains('on'));
+  els.forEach(e=>e.classList.toggle('on',!allOn));
+}
+function getSelectedSizes(containerId){
+  return [...$(containerId).querySelectorAll('.size-cb.on')].map(e=>e.dataset.size);
+}
+async function saveProduct(){
+  const gv=id=>$(id)?.value||'';
+  const sizes=getSelectedSizes('p-sizes-grid');
+  if(editingProductId){
+    const p=products.find(x=>x.id===editingProductId);if(!p)return;
+    Object.assign(p,{desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,sizes,logos:[...pendingModalLogos]});
+    try{await upsert('products',p.id,p);CM('modal-product');renderProdsTable();if(currentView==='product-detail')openProdDet(p.id);toast('✅ Prodotto aggiornato');}catch(e){}
+  } else {
+    const p={id:'p'+Date.now(),desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,sizes,logos:[...pendingModalLogos],images:[],files:[]};
+    if(!p.desc){alert('Inserisci una descrizione');return;}
+    try{await upsert('products',p.id,p);products.push(p);CM('modal-product');renderDashboard();if(currentView==='products')renderProdsTable();toast('✅ Prodotto aggiunto');}catch(e){}
+  }
+  editingProductId=null;
+}
+async function delProdById(id){if(!confirm('Eliminare?'))return;try{await del('products',id);products=products.filter(p=>p.id!==id);renderDashboard();renderProdsTable();toast('Prodotto eliminato');}catch(e){}}
+
+// ── RICAMI ────────────────────────────────────────────────────────────────────
+function renderRicami(){
+  const c=$('ricami-list');
+  if(!ricami.length){c.innerHTML='<div class="empty-msg">Nessun programma ricamo ancora. Clicca "+ Nuovo programma" per iniziare.</div>';return;}
+  c.innerHTML=ricami.map(r=>`<div class="ricamo-card">
+    <div class="ricamo-card-body">
+      ${r.img?`<img class="ricamo-img" src="${r.img}" alt="">`:`<div class="ricamo-img-placeholder">🧵</div>`}
+      <div class="ricamo-meta">
+        <div class="ricamo-name">${r.name}</div>
+        <div class="ricamo-school">${r.school||'—'}</div>
+        <span class="ricamo-code">${r.name}</span>
+        ${r.price?`<div class="ricamo-price">€ ${r.price}</div>`:''}
+        ${r.colors?`<div style="font-size:11px;color:var(--txt2);margin-top:4px;line-height:1.6">${r.colors.split('\n').slice(0,3).map(c=>`<div>${c}</div>`).join('')}</div>`:''}
+        ${r.fileData?`<button class="btn btn-sm" style="margin-top:6px;width:fit-content" onclick="dlFile('${r.fileName||'ricamo.dst'}','${r.fileData}')">📎 Scarica ${r.fileName||'file ricamo'}</button>`:''}
+      </div>
+    </div>
+    <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="openEditRicamo('${r.id}')">✏️ Modifica</button>
+      <button class="btn btn-sm btn-r" onclick="delRicamo('${r.id}')">Elimina</button>
+    </div>
+  </div>`).join('');
+}
+function fillRicamoSelect(){
+  const opts='<option value="">Nessuno</option>'+ricami.map(r=>`<option value="${r.id}">${r.name}${r.school?' — '+r.school:''}</option>`).join('');
+  ['p-ef-ricamo','p-eb-ricamo','p-eo-ricamo'].forEach(id=>{const sel=$(id);if(sel)sel.innerHTML=opts;});
+}
+function openNewRicamo(){
+  editingRicamoId=null;pendingRicamoImg=null;pendingRicamoFile=null;
+  $('ricamo-modal-title').textContent='Nuovo programma ricamo';
+  $('r-del-btn').style.display='none';
+  ['r-name','r-school','r-colors','r-notes'].forEach(id=>{$(id).value='';});
+  $('r-price').value='';
+  $('r-img-preview').style.display='none';
+  $('r-file-preview').textContent='';
+  $('modal-ricamo').style.display='flex';
+}
+function openEditRicamo(id){
+  const r=ricami.find(x=>x.id===id);if(!r)return;
+  editingRicamoId=id;pendingRicamoImg=r.img||null;pendingRicamoFile=r.fileData||null;
+  $('ricamo-modal-title').textContent='Modifica programma ricamo';
+  $('r-del-btn').style.display='flex';
+  $('r-name').value=r.name||'';$('r-school').value=r.school||'';
+  $('r-colors').value=r.colors||'';$('r-notes').value=r.notes||'';$('r-price').value=r.price||'';
+  if(r.img){$('r-img-preview').src=r.img;$('r-img-preview').style.display='block';}
+  else $('r-img-preview').style.display='none';
+  $('r-file-preview').textContent=r.fileName?'File: '+r.fileName:'';
+  $('modal-ricamo').style.display='flex';
+}
+function handleRicamoImg(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{pendingRicamoImg=ev.target.result;$('r-img-preview').src=ev.target.result;$('r-img-preview').style.display='block';};r.readAsDataURL(f);}
+function handleRicamoFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{pendingRicamoFile=ev.target.result;currentRicamoFileName=f.name;$('r-file-preview').textContent='✅ '+f.name;};r.readAsDataURL(f);}
+let currentRicamoFileName='';
+async function saveRicamo(){
+  const gv=id=>$(id)?.value||'';
+  if(!gv('r-name')){alert('Inserisci un nome/codice');return;}
+  const r={id:editingRicamoId||'r'+Date.now(),name:gv('r-name').toUpperCase(),school:gv('r-school'),colors:gv('r-colors'),notes:gv('r-notes'),price:gv('r-price'),img:pendingRicamoImg||null,fileData:pendingRicamoFile||null,fileName:currentRicamoFileName||null};
+  if(editingRicamoId){const idx=ricami.findIndex(x=>x.id===editingRicamoId);if(idx>=0)ricami[idx]=r;}
+  else ricami.push(r);
+  try{await upsert('ricami',r.id,r);CM('modal-ricamo');renderRicami();fillRicamoSelect();toast('✅ Programma ricamo salvato');}catch(e){}
+}
+async function delCurrentRicamo(){if(!editingRicamoId||!confirm('Eliminare?'))return;try{await del('ricami',editingRicamoId);ricami=ricami.filter(r=>r.id!==editingRicamoId);CM('modal-ricamo');renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
+async function delRicamo(id){if(!confirm('Eliminare?'))return;try{await del('ricami',id);ricami=ricami.filter(r=>r.id!==id);renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
+
+// ── STATUSES ──────────────────────────────────────────────────────────────────
+function fillStatusSelects(){
+  [$('o-sta'),$('ord-sta')].forEach(sel=>{if(!sel)return;const cur=sel.value;sel.innerHTML=(sel.id==='ord-sta'?'<option value="">Tutti gli status</option>':'')+statuses.map(s=>`<option value="${s.name}" ${s.name===cur?'selected':''}>${s.name}</option>`).join('');});
+}
+function renderStatuses(){
+  $('status-list').innerHTML=statuses.map(s=>`<div class="status-item">
+    <span class="badge ${s.color||'b-gray'}">${s.name}</span>
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" onclick="openEditStatus('${s.id}')">✏️ Modifica</button>
+    <button class="btn btn-sm btn-r" onclick="delStatus('${s.id}')">Elimina</button>
+  </div>`).join('');
+}
+function pickColor(el){document.querySelectorAll('#st-color-pick .sc-opt').forEach(e=>e.classList.remove('active'));el.classList.add('active');selectedStatusColor=el.dataset.color;}
+function openNewStatus(){
+  editingStatusId=null;$('st-modal-title').textContent='Nuovo status';
+  $('st-name').value='';selectedStatusColor='b-gray';
+  document.querySelectorAll('#st-color-pick .sc-opt').forEach(e=>{e.classList.toggle('active',e.dataset.color==='b-gray');});
+  $('modal-status').style.display='flex';
+}
+function openEditStatus(id){
+  const s=statuses.find(x=>x.id===id);if(!s)return;
+  editingStatusId=id;$('st-modal-title').textContent='Modifica status';
+  $('st-name').value=s.name;selectedStatusColor=s.color||'b-gray';
+  document.querySelectorAll('#st-color-pick .sc-opt').forEach(e=>{e.classList.toggle('active',e.dataset.color===selectedStatusColor);});
+  $('modal-status').style.display='flex';
+}
+async function saveStatus(){
+  const name=$('st-name').value.trim().toUpperCase();if(!name){alert('Inserisci un nome');return;}
+  if(editingStatusId){
+    const s=statuses.find(x=>x.id===editingStatusId);if(!s)return;
+    s.name=name;s.color=selectedStatusColor;
+    try{await upsert('statuses',s.id,s);CM('modal-status');fillStatusSelects();renderStatuses();toast('Status aggiornato');}catch(e){}
+  } else {
+    const s={id:'s'+Date.now(),name,color:selectedStatusColor};
+    statuses.push(s);
+    try{await upsert('statuses',s.id,s);CM('modal-status');fillStatusSelects();renderStatuses();toast('Status aggiunto');}catch(e){}
+  }
+}
+async function delStatus(id){if(!confirm('Eliminare?'))return;statuses=statuses.filter(s=>s.id!==id);try{await del('statuses',id);}catch(e){}fillStatusSelects();renderStatuses();}
+
+// ── SUPPLIERS ─────────────────────────────────────────────────────────────────
+function renderSuppliers(){
+  const sups=[...new Set(orders.map(o=>o.supplier))].sort();
+  renderSuppliersCards();
+  
+  const tbody=$('sup-tbody');
+  if(tbody)tbody.innerHTML=sups.map(s=>{const os=orders.filter(o=>o.supplier===s);const tot=os.reduce((a,o)=>a+calcTotal(o),0);const inv=os.filter(o=>o.status==='FATTURATO').length;const act=os.filter(o=>!['FATTURATO','RICEVUTO'].includes(o.status)).length;return`<tr><td style="font-weight:700">${s}</td><td style="text-align:center">${os.length}</td><td style="text-align:center">${tot}</td><td style="text-align:center">${inv}</td><td style="text-align:center"><span class="badge b-amber">${act}</span></td></tr>`;}).join('');
+}
+
+// ── EXPORT ────────────────────────────────────────────────────────────────────
+function openExport(){renderExpList();$('modal-export').style.display='flex';}
+function renderExpList(){
+  const q=($('exp-q')||{}).value?.toLowerCase()||'';
+  const list=orders.filter(o=>!q||[o.school,o.num,o.supplier].some(x=>x?.toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
+  $('exp-list').innerHTML=list.map(o=>`<div class="exp-item ${exportOrdId===o.id?'sel':''}" onclick="exportOrdId='${o.id}';renderExpList()">
+    <div><div style="font-size:13px;font-weight:700">${o.school}${o.desc?' — '+o.desc:''}</div>
+    <div style="font-size:11px;color:var(--txt2);margin-top:2px">${o.supplier} · ${fmtDate(o.date)} · ${o.num||'—'} · ${calcTotal(o)} pz.</div></div>
+    ${sbadge(o.status)}</div>`).join('');
+}
+function doExport(){
+  if(!exportOrdId){toast('Seleziona prima un ordine');return;}
+  const o=orders.find(x=>x.id===exportOrdId);if(!o){toast('Ordine non trovato');return;}
+  const btn=$('exp-btn'),lbl=$('exp-lbl'),spin=$('exp-spin');
+  btn.disabled=true;lbl.textContent='Generazione…';spin.style.display='block';
+  setTimeout(()=>{try{genXLSX(o);}catch(e){toast('Errore: '+e.message);}finally{btn.disabled=false;lbl.textContent='Scarica Excel';spin.style.display='none';}},80);
+}
+function genXLSX(o){
+  const XLSX=window.XLSX;if(!XLSX){toast('Libreria non caricata');return;}
+  const map=pm(),rmap=rm();
+  const SZ=['2YXS','YXS','XXS','XS','S','M','L','XL','XXL','3XL','4XL','Unica'];
+  const rows=[
+    [`ORDINE — ${o.school}${o.desc?' — '+o.desc:''}`],
+    [`Fornitore: ${o.supplier}   |   N°: ${o.num||'—'}   |   Data: ${fmtDate(o.date)}   |   POM: ${o.pom||'—'}   |   Dest: ${o.dest||'—'}`],
+    [`Status: ${o.status||'—'}   |   Deadline: ${fmtDate(o.deadline)}   |   Note: ${o.notes||'—'}`],[],
+    ['Descrizione prodotto','Articolo','Colore','Codice fornitore','Codice UU','Scuola','Tecnica','Codice cuore','Codice schiena','Codice altro','Codice cap',...SZ,'TOT']
+  ];
+  const totals={};SZ.forEach(s=>totals[s]=0);
+  for(const pr of(o.products||[])){
+    const p=map[pr.pid]||{};const sz=pr.sizes||{};let rt=0;
+    const szv=SZ.map(s=>{const v=+sz[s]||0;totals[s]+=v;rt+=v;return v||'';});
+    rows.push([p.desc||'—',p.article||'—',p.color||'—',p.code||'—',p.uu||'—',p.school||'—',p.printNote||'—',p.embFront||'—',p.embBack||'—',p.embOther||'—',p.embCap||'—',...szv,rt]);
+  }
+  rows.push(['TOTALE','','','','','','','','','','',...SZ.map(s=>totals[s]||''),SZ.reduce((a,s)=>a+totals[s],0)]);
+  const ws1=XLSX.utils.aoa_to_sheet(rows);
+  ws1['!cols']=[{wch:34},{wch:14},{wch:12},{wch:15},{wch:15},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},...SZ.map(()=>({wch:6})),{wch:7}];
+  const rows2=[[`PERSONALIZZAZIONI — ${o.school}`],[],['Prodotto','Scuola','Tecnica','Codice cuore','Codice schiena','Codice gamba','Codice cappellino','Programma Ricamo','Prezzo ricamo','Descrizione completa']];
+  for(const pr of(o.products||[])){const p=map[pr.pid]||{};const ric=p.ricamoId?rmap[p.ricamoId]:null;rows2.push([p.desc||'—',p.school||'—',p.printNote||'—',p.embFront||'—',p.embBack||'—',p.embOther||'—',p.embCap||'—',ric?ric.name:'—',ric?('€'+ric.price):'—',p.custom||'—']);}
+  const ws2=XLSX.utils.aoa_to_sheet(rows2);ws2['!cols']=[{wch:32},{wch:12},{wch:12},{wch:15},{wch:15},{wch:15},{wch:15},{wch:15},{wch:10},{wch:50}];
+  const wb=XLSX.utils.book_new();
+  const sn=(o.school||'Ordine').replace(/[^a-zA-Z0-9_ ]/g,'').slice(0,28)||'Ordine';
+  XLSX.utils.book_append_sheet(wb,ws1,sn);XLSX.utils.book_append_sheet(wb,ws2,'Personalizzazioni');
+  XLSX.writeFile(wb,`ordine_${sn.replace(/ /g,'_')}_${(o.date||'').replace(/-/g,'')}.xlsx`);
+  CM('modal-export');toast('📥 File Excel scaricato');
+}
+
+// ── DRAG & DROP GENERALE ──────────────────────────────────────────────────────
+document.querySelectorAll('.dropzone').forEach(dz=>{
+  // Skip gallery-dropzone and logos-dropzone — handled separately to avoid double upload
+  if(dz.id==='gallery-dropzone'||dz.id==='logos-dropzone'||dz.id==='modal-logos-dropzone')return;
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{
+    e.preventDefault();dz.classList.remove('over');
+    const fi=dz.querySelector('input[type=file]');if(!fi)return;
+    const dt=new DataTransfer();
+    Array.from(e.dataTransfer.files).forEach(f=>dt.items.add(f));
+    fi.files=dt.files;fi.dispatchEvent(new Event('change'));
+  });
+});
+
+// ── SUPPLIERS ANAGRAFICHE ─────────────────────────────────────────────────────
+let suppliersData = [];
+let editingSupplierId = null;
+
+async function loadSuppliers(){
+  try{const r=await db.from('suppliers_data').select('*');suppliersData=(r.data&&r.data.length)?r.data.map(x=>x.data):[];}
+  catch(e){suppliersData=[];}
+}
+
+function renderSuppliersCards(){
+  const sups=[...new Set(orders.map(o=>o.supplier))].sort();
+  // Anagrafiche
+  const c=$('suppliers-list');
+  if(c){
+    if(!suppliersData.length){c.innerHTML='<div class="empty-msg">Nessun fornitore ancora. Clicca "+ Nuovo fornitore".</div>';}
+    else{c.innerHTML=suppliersData.map(s=>`
+      <div class="ricamo-card" style="margin-bottom:12px">
+        <div style="padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:15px;font-weight:700">${s.name||'—'}</div>
+              ${s.web?`<a href="${s.web}" target="_blank" style="font-size:12px;color:var(--accent)">${s.web}</a>`:''}
+            </div>
+            <button class="btn btn-sm" onclick="openEditSupplier('${s.id}')">✏️ Modifica</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px;font-size:13px">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Accesso IT</div>
+              <div>${s.emailIt||'—'}</div>
+              ${s.pwIt?`<div style="font-family:monospace;font-size:12px;color:var(--txt3)">••••••••</div>`:''}
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Accesso CH</div>
+              <div>${s.emailCh||'—'}</div>
+              ${s.pwCh?`<div style="font-family:monospace;font-size:12px;color:var(--txt3)">••••••••</div>`:''}
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Contatto</div>
+              <div style="font-weight:600">${s.contact||'—'}</div>
+              <div style="font-size:12px;color:var(--txt2)">${s.contactEmail||''}</div>
+              <div style="font-size:12px;color:var(--txt2)">${s.phone||''}</div>
+            </div>
+          </div>
+          ${s.notes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--txt2)">${s.notes}</div>`:''}
+        </div>
+      </div>`).join('');}
+  }
+  // Summary table
+  const tbody=$('sup-tbody');
+  if(tbody)tbody.innerHTML=sups.map(s=>{const os=orders.filter(o=>o.supplier===s);const tot=os.reduce((a,o)=>a+calcTotal(o),0);const inv=os.filter(o=>o.status==='FATTURATO').length;const act=os.filter(o=>!['FATTURATO','RICEVUTO'].includes(o.status)).length;return`<tr><td style="font-weight:700">${s}</td><td style="text-align:center">${os.length}</td><td style="text-align:center">${tot}</td><td style="text-align:center">${inv}</td><td style="text-align:center"><span class="badge b-amber">${act}</span></td></tr>`;}).join('');
+}
+
+function openNewSupplier(){
+  editingSupplierId=null;
+  $('sup-modal-title').textContent='Nuovo fornitore';
+  $('sf-del-btn').style.display='none';
+  ['sf-name','sf-web','sf-email-it','sf-pw-it','sf-email-ch','sf-pw-ch','sf-contact','sf-contact-email','sf-phone','sf-notes'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  $('modal-supplier').style.display='flex';
+}
+function openEditSupplier(id){
+  const s=suppliersData.find(x=>x.id===id);if(!s)return;
+  editingSupplierId=id;
+  $('sup-modal-title').textContent='Modifica fornitore';
+  $('sf-del-btn').style.display='flex';
+  $('sf-name').value=s.name||'';$('sf-web').value=s.web||'';
+  $('sf-email-it').value=s.emailIt||'';$('sf-pw-it').value=s.pwIt||'';
+  $('sf-email-ch').value=s.emailCh||'';$('sf-pw-ch').value=s.pwCh||'';
+  $('sf-contact').value=s.contact||'';$('sf-contact-email').value=s.contactEmail||'';
+  $('sf-phone').value=s.phone||'';$('sf-notes').value=s.notes||'';
+  $('modal-supplier').style.display='flex';
+}
+async function saveSupplier(){
+  const gv=id=>$(id)?.value||'';
+  if(!gv('sf-name')){alert('Inserisci il nome del fornitore');return;}
+  const s={id:editingSupplierId||'sup'+Date.now(),name:gv('sf-name'),web:gv('sf-web'),emailIt:gv('sf-email-it'),pwIt:gv('sf-pw-it'),emailCh:gv('sf-email-ch'),pwCh:gv('sf-pw-ch'),contact:gv('sf-contact'),contactEmail:gv('sf-contact-email'),phone:gv('sf-phone'),notes:gv('sf-notes')};
+  if(editingSupplierId){const idx=suppliersData.findIndex(x=>x.id===editingSupplierId);if(idx>=0)suppliersData[idx]=s;else suppliersData.push(s);}
+  else suppliersData.push(s);
+  try{
+    await upsert('suppliers_data',s.id,s);
+    CM('modal-supplier');renderSuppliers();
+    // Also update supplier dropdowns
+    fillSupplierDropdowns();
+    toast('✅ Fornitore salvato');
+  }catch(e){toast('Errore: '+e.message);}
+}
+async function delCurrentSupplier(){
+  if(!editingSupplierId||!confirm('Eliminare questo fornitore?'))return;
+  try{await del('suppliers_data',editingSupplierId);suppliersData=suppliersData.filter(x=>x.id!==editingSupplierId);CM('modal-supplier');renderSuppliers();toast('Fornitore eliminato');}
+  catch(e){toast('Errore: '+e.message);}
+}
+
+// ── STAMPATORE/RICAMATORE OPTIONS ─────────────────────────────────────────────
+let stampatoreOptions = ['Ferrara','KGS','Ferrara + KGS','Tee SRL','Rega'];
+
+function fillStampatoreSelect(selId, curVal=''){
+  const sel=$(selId);if(!sel)return;
+  sel.innerHTML='<option value="">—</option>'+stampatoreOptions.map(o=>`<option ${o===curVal?'selected':''}>${o}</option>`).join('');
+}
+
+function fillSupplierDropdowns(){
+  // Order modal supplier select
+  const names = suppliersData.map(s=>s.name).sort();
+  const allNames = [...new Set([...names,'Errea','Toptex','Actionwear','Gadgetmania','Rega','Tessilpolo','ElleEmme','Tee SRL','Sew What','Marketing Creation','Tagliotex','Agatex','Brook Taverner'])].sort();
+  ['o-sup','p-sup'].forEach(id=>{
+    const sel=$(id);if(!sel)return;
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Seleziona…</option>'+allNames.map(n=>`<option ${n===cur?'selected':''}>${n}</option>`).join('');
+  });
+  fillStampatoreSelect('p-dest');
+  fillStampatoreSelect('o-dest');
+}
+
+// ── EDIT PRODUCT ──────────────────────────────────────────────────────────────
+let editingProductId = null;
+
+function openEditProduct(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  editingProductId=id;
+  $('prod-modal-title').textContent='Modifica prodotto';
+  $('prod-del-btn').style.display='flex';
+  fillRicamoSelect();fillSupplierDropdowns();
+  $('p-desc').value=p.desc||'';$('p-sup').value=p.supplier||'';$('p-art').value=p.article||'';
+  $('p-col').value=p.color||'';$('p-code').value=p.code||'';$('p-uu').value=p.uu||'';
+  $('p-sch').value=p.school||'';$('p-custom').value=p.custom||'';
+  $('p-notes').value=p.notes||'';
+  fillStampatoreSelect('p-dest',p.dest||'');
+  $('p-ef-ricamo').value=p.embFrontRicamo||'';
+  $('p-eb-ricamo').value=p.embBackRicamo||'';
+  $('p-eo-ricamo').value=p.embOtherRicamo||'';
+  renderSizeGrid('p-sizes-grid',p.sizes||[]);
+  pendingModalLogos=[...(p.logos||[])];renderModalLogosGrid(pendingModalLogos);
+  $('modal-product').style.display='flex';
+}
+function delEditingProduct(){
+  if(!editingProductId||!confirm('Eliminare questo prodotto?'))return;
+  delProdById(editingProductId);CM('modal-product');editingProductId=null;
+}
+
+// ── MANUAL PRODUCT ROW ────────────────────────────────────────────────────────
+function addManualRow(){
+  const note=prompt('Descrivi brevemente il prodotto (es. campione t-shirt rossa):');
+  if(!note)return;
+  orderRows.push({pid:null,manual:true,note,sizes:{}});
+  renderOrderRows();
+}
+
+// ── IMPROVED PRODUCT SEARCH ───────────────────────────────────────────────────
+function addPRow(){
+  // Open inline search modal
+  const inp=$('prod-search-input');
+  if(inp)inp.value='';
+  const res=$('prod-search-results');
+  if(res)res.innerHTML='<div style="font-size:13px;color:var(--txt2);text-align:center;padding:24px">Inizia a scrivere per cercare un prodotto</div>';
+  $('modal-prod-search').style.display='flex';
+  setTimeout(()=>{const inp=$('prod-search-input');if(inp)inp.focus();},100);
+}
+
+function renderProdSearchResults(q){
+  const sq=(q||'').trim().toLowerCase();
+  const res=$('prod-search-results');
+  if(!res)return;
+  if(!sq){res.innerHTML='<div style="font-size:13px;color:var(--txt2);text-align:center;padding:24px">Inizia a scrivere per cercare un prodotto</div>';return;}
+  const found=products.filter(p=>[p.desc,p.uu,p.article,p.code,p.school,p.color].some(x=>x?.toLowerCase().includes(sq)));
+  if(!found.length){res.innerHTML='<div style="font-size:13px;color:var(--txt2);text-align:center;padding:24px">Nessun prodotto trovato per "'+q+'"</div>';return;}
+  res.innerHTML=found.map(p=>{
+    const firstImg=getProdImg(p);
+    return`<div class="prod-search-item" onclick="selectProdFromSearch('${p.id}')">
+      ${firstImg
+        ? `<img class="prod-search-thumb" src="${firstImg}" alt="">`
+        : `<div class="prod-search-placeholder">📦</div>`}
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.desc}</div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${[p.supplier,p.article,p.color,p.school].filter(Boolean).join(' · ')}</div>
+        ${p.uu?`<div style="font-size:11px;font-family:monospace;color:var(--txt3)">${p.uu}</div>`:''}
+      </div>
+      <span style="font-size:11px;color:var(--accent-t);font-weight:700;flex-shrink:0;padding-left:8px">Seleziona →</span>
+    </div>`;
+  }).join('');
+}
+
+function selectProdFromSearch(pid){
+  orderRows.push({pid,sizes:{}});
+  renderOrderRows();
+  CM('modal-prod-search');
+}
+
+// ── STATUS CHANGE FROM DASHBOARD ──────────────────────────────────────────────
+async function changeOrderStatus(orderId, newStatus, selectEl){
+  const o=orders.find(x=>x.id===orderId);if(!o)return;
+  o.status=newStatus;
+  // Update badge color immediately
+  const badge=document.getElementById('dash-badge-'+orderId);
+  if(badge){
+    const stColor=(statuses.find(s=>s.name===newStatus)||{color:'b-gray'}).color||'b-gray';
+    badge.className='badge '+stColor;
+    badge.style.cssText='font-size:10px;padding:2px 7px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis';
+    badge.title=newStatus||'';
+  }
+  try{await upsert('orders',o.id,o);toast('Status aggiornato');}
+  catch(e){toast('Errore aggiornamento status');}
+}
+
+
+// ── STAMPATORI / RICAMATORI ───────────────────────────────────────────────────
+function renderStampatori(){
+  const c=$('stampatori-list');if(!c)return;
+  c.innerHTML=stampatoreOptions.map((opt,i)=>`
+    <div class="status-item">
+      <span style="font-size:13px;font-weight:600">${opt}</span>
+      <div style="flex:1"></div>
+      <button class="btn btn-sm btn-r" onclick="removeStampatore(${i})">Elimina</button>
+    </div>`).join('');
+  // Update all selects
+  fillStampatoreSelect('p-dest');
+  fillStampatoreSelect('o-dest');
+}
+
+function addStampatore(){
+  const name=prompt('Nome stampatore/ricamatore:');
+  if(!name||!name.trim())return;
+  stampatoreOptions.push(name.trim());
+  saveStampatoreOptions();
+  renderStampatori();
+  toast('Voce aggiunta');
+}
+
+function removeStampatore(idx){
+  if(!confirm('Eliminare "'+stampatoreOptions[idx]+'"?'))return;
+  stampatoreOptions.splice(idx,1);
+  saveStampatoreOptions();
+  renderStampatori();
+  toast('Voce eliminata');
+}
+
+function saveStampatoreOptions(){
+  try{localStorage.setItem('stampatoreOptions',JSON.stringify(stampatoreOptions));}catch(e){}
+}
+
+function loadStampatoreOptions(){
+  try{
+    const saved=localStorage.getItem('stampatoreOptions');
+    if(saved)stampatoreOptions=JSON.parse(saved);
+  }catch(e){}
+}
+
+
+// ── EXPORT PER RICAMATORE (HTML → apri con Excel, con immagini) ─────────────
+async function exportRicamatore(){
+  if(!currentOrdId){toast('Nessun ordine aperto');return;}
+  const o=orders.find(x=>x.id===currentOrdId);
+  if(!o){toast('Ordine non trovato');return;}
+  const btn=document.getElementById('export-ric-btn');
+  const origHTML=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='<div class="spinner" style="display:block;border-top-color:#fff;border-color:rgba(255,255,255,.4)"></div> Generazione...';}
+  try{
+    const map=pm();
+    const rmapObj=Object.fromEntries(ricami.map(r=>[r.id,r]));
+    const ALL_SZ=['2YXS','YXS','XXS','XS','S','M','L','XL','XXL','3XL','4XL','Unica'];
+    const orderProds=(o.products||[]).filter(pr=>!pr.manual&&map[pr.pid]&&Object.values(pr.sizes||{}).some(v=>+v>0));
+    const usedSizes=ALL_SZ.filter(s=>orderProds.some(pr=>+((pr.sizes||{})[s]||0)>0));
+
+    const CSS=`
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;font-size:12px;}
+      h1{font-size:16px;font-weight:bold;margin-bottom:3px;}
+      .hdr{background:#1A1A2E;color:#fff;padding:14px 20px;}
+      .hdr2{background:#374151;color:#CBD5E1;padding:7px 20px;font-size:11px;margin-bottom:0;}
+      .section{padding:16px;}
+      .stitle{background:#1A1A2E;color:#fff;padding:10px 16px;font-size:13px;font-weight:bold;margin-bottom:0;}
+      .ptitle{background:#2563EB;color:#fff;padding:10px 16px;font-size:13px;font-weight:bold;}
+      table{border-collapse:collapse;width:100%;}
+      .rt th{background:#2563EB;color:#fff;padding:8px 10px;text-align:center;font-size:11px;border:1px solid #1d4ed8;}
+      .rt th.l{text-align:left;}
+      .rt td{padding:8px 10px;border:1px solid #CBD5E1;text-align:center;font-size:12px;}
+      .rt td.n{text-align:left;}
+      .rt tr:nth-child(even) td{background:#EFF6FF;}
+      .rt td.tot{background:#2563EB;color:#fff;font-weight:bold;}
+      .rt tr.grand td{background:#1A1A2E;color:#fff;font-weight:bold;}
+      .notes-row td{background:#FFFBEB!important;border:2px dashed #FCD34D!important;padding:14px 12px!important;color:#92400E;font-size:11px;font-style:italic;}
+      .mg{display:grid;grid-template-columns:180px 1fr 220px;border:1px solid #e2e8f0;border-top:none;}
+      .ic{border-right:1px solid #e2e8f0;}
+      .ib{padding:12px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;text-align:center;}
+      .ib img{max-width:155px;max-height:155px;object-fit:contain;}
+      .il{font-size:10px;color:#94A3B8;margin-top:5px;font-style:italic;}
+      .lc{border-right:1px solid #e2e8f0;padding:10px;background:#F8FAFC;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;min-height:180px;}
+      .li{text-align:center;}
+      .li img{max-width:110px;max-height:110px;object-fit:contain;display:block;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:3px;}
+      .dc table{width:100%;border-collapse:collapse;}
+      .dc td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;vertical-align:top;}
+      .dc td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#374151;width:48%;white-space:nowrap;}
+      .dc td.vl{color:#1A1A2E;}
+      .dc td.code{color:#1e40af;font-family:monospace;font-weight:bold;}
+      .st{border:1px solid #e2e8f0;border-top:2px solid #1A1A2E;}
+      .st th{background:#1A1A2E;color:#fff;padding:8px 10px;text-align:center;font-size:11px;border:1px solid #374151;}
+      .st th.l{text-align:left;}
+      .st td{padding:9px 10px;border:1px solid #CBD5E1;text-align:center;font-size:13px;font-weight:bold;}
+      .st td.art{text-align:left;font-size:12px;background:#F8FAFC;font-weight:normal;}
+      .st td.tot{background:#2563EB;color:#fff;font-size:14px;}
+      .prod-section{margin-bottom:30px;}
+    `;
+
+    let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS}</style></head><body>`;
+
+    // ── Header comune ──
+    const hdrtxt=`<div class="hdr"><h1>${o.school||''}${o.desc?' — '+o.desc:''}</h1></div><div class="hdr2">Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}${o.dest?' &nbsp;|&nbsp; Dest: '+o.dest:''}</div>`;
+
+    // ── PAGINA 1: RIEPILOGO ──
+    html+=hdrtxt+'<div class="section"><div class="stitle">RIEPILOGO QUANTITÀ TOTALI</div>';
+    html+=`<table class="rt"><thead><tr><th class="l">Prodotto</th>${usedSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead><tbody>`;
+    const grand={};usedSizes.forEach(s=>grand[s]=0);
+    for(const pr of orderProds){
+      const p=map[pr.pid]||{};const sz=pr.sizes||{};let rt=0;
+      html+=`<tr><td class="n">${p.desc||'—'} — ${p.article||''} ${p.color||''}</td>`;
+      usedSizes.forEach(s=>{const v=+sz[s]||0;grand[s]+=v;rt+=v;html+=`<td>${v||''}</td>`;});
+      html+=`<td class="tot">${rt}</td></tr>`;
+    }
+    // Manual products
+    (o.products||[]).filter(pr=>pr.manual).forEach(pr=>{
+      html+=`<tr><td class="n" colspan="${usedSizes.length+2}" style="color:#64748b;font-style:italic">📝 ${pr.note||''}</td></tr>`;
+    });
+    let gt=0;usedSizes.forEach(s=>gt+=grand[s]||0);
+    html+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:15px">${gt}</td></tr>`;
+    // Note row — empty, writable by recipient
+    html+=`<tr class="notes-row"><td colspan="${usedSizes.length+2}">
+      📝 &nbsp;<strong>Note / Istruzioni aggiuntive:</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    </td></tr>`;
+    html+=`</tbody></table></div>`;
+
+    // ── PAGINE PRODOTTI ──
+    for(let pi=0;pi<orderProds.length;pi++){
+      const pr=orderProds[pi];
+      const p=map[pr.pid]||{};
+      const sz=pr.sizes||{};
+      const prodSizes=ALL_SZ.filter(s=>+sz[s]>0);
+      const tot=prodSizes.reduce((a,s)=>a+(+sz[s]||0),0);
+
+      // Collect all logo/stamp images
+      const logoImgs=[];
+      if(p.logos&&p.logos.length){
+        p.logos.forEach((img,idx)=>{if(img)logoImgs.push({src:img,label:`Logo/Stampa ${p.logos.length>1?idx+1:''}`.trim()});});
+      }
+      for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba/braccio']]){
+        const rid=p[key];
+        if(rid&&rmapObj[rid]&&rmapObj[rid].img){
+          logoImgs.push({src:rmapObj[rid].img,label:`${label}: ${rmapObj[rid].name}`});
+        }
+      }
+
+      const prodImg=getProdImg(p);
+
+      html+=`${hdrtxt}<div class="section"><div class="ptitle">${pi+1} / ${orderProds.length} — ${p.desc||'—'}</div>`;
+      html+=`<div class="mg">`;
+
+      // Col 1: foto capo
+      html+=`<div class="ic"><div class="ib">${prodImg?`<img src="${prodImg}">`:'<span style="color:#94A3B8;font-style:italic;font-size:11px">Nessuna foto capo</span>'}<div class="il">Immagine capo</div></div></div>`;
+
+      // Col 2: immagini loghi
+      html+=`<div class="lc">`;
+      if(logoImgs.length){
+        logoImgs.forEach(li=>{html+=`<div class="li"><img src="${li.src}"><div class="il">${li.label}</div></div>`;});
+      } else {
+        html+=`<span style="margin:auto;color:#94A3B8;font-style:italic;font-size:12px">Nessuna immagine logo/stampa</span>`;
+      }
+      html+=`</div>`;
+
+      // Col 3: dettagli
+      const rows=[];
+      if(p.article) rows.push(['Articolo',p.article,'']);
+      if(p.color)   rows.push(['Colore',p.color,'']);
+      if(p.uu)      rows.push(['Codice UU',p.uu,'code']);
+      if(p.school)  rows.push(['Scuola',p.school,'']);
+      if(p.custom)  rows.push(['Personalizzazione',p.custom,'']);
+      for(const [key,label] of [['embFrontRicamo','Fronte ricamo'],['embBackRicamo','Retro ricamo'],['embOtherRicamo','Gamba/braccio']]){
+        const rid=p[key];
+        if(rid&&rmapObj[rid]){
+          const ric=rmapObj[rid];
+          rows.push([label+' — codice',ric.name||'—','code']);
+          if(ric.colors)rows.push([label+' — colori filo',(ric.colors||'').split('\n').join('<br>'),'']);
+        }
+      }
+      html+=`<div class="dc"><table>${rows.map(([k,v,cls])=>`<tr><td class="lb">${k}</td><td class="vl ${cls}">${v}</td></tr>`).join('')}</table></div>`;
+      html+=`</div>`;
+
+      // Tabella taglie (solo una volta)
+      html+=`<table class="st"><thead><tr><th class="l">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
+      html+=`<tbody><tr><td class="art">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
+      html+=`</div>`;
+    }
+
+    html+=`</body></html>`;
+
+    const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const sn=(o.school||'ordine').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20);
+    a.href=url;
+    a.download=`ricamatore_${sn}_${(o.date||'').replace(/-/g,'')}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('📥 File scaricato! Aprilo con Excel.');
+  }catch(e){
+    console.error(e);
+    toast('Errore: '+e.message.slice(0,80));
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=origHTML;}
+  }
+}
+
+
+
+
+
+
+
+
+// ── LOGO IMAGES ───────────────────────────────────────────────────────────────
+let pendingModalLogos = []; // logos being added in modal
+
+function renderLogosGrid(p, containerId){
+  const c=document.getElementById(containerId);
+  if(!c)return;
+  const logos=p.logos||[];
+  c.innerHTML=logos.map((img,i)=>`
+    <div style="position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:var(--bg2)">
+      <img src="${img}" style="width:100%;height:90px;object-fit:contain;display:block;background:var(--bg2)">
+      <button onclick="removeLogo('${p.id}',${i})" style="position:absolute;top:3px;right:3px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+    </div>`).join('');
+}
+
+function renderModalLogosGrid(logos){
+  const c=document.getElementById('modal-logos-grid');
+  if(!c)return;
+  c.innerHTML=logos.map((img,i)=>`
+    <div style="position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:var(--bg2)">
+      <img src="${img}" style="width:100%;height:70px;object-fit:contain;display:block;background:var(--bg2)">
+      <button onclick="removeModalLogo(${i})" style="position:absolute;top:2px;right:2px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+    </div>`).join('');
+}
+
+function removeModalLogo(idx){
+  pendingModalLogos.splice(idx,1);
+  renderModalLogosGrid(pendingModalLogos);
+}
+
+async function uploadLogoImages(e){
+  const p=products.find(x=>x.id===currentProdId);if(!p)return;
+  if(!p.logos)p.logos=[];
+  const files=Array.from(e.target.files);
+  let done=0;
+  for(const f of files){
+    const compressed=await new Promise(res=>{
+      const r=new FileReader();
+      r.onload=async ev=>{res(await compressImg(ev.target.result,600,0.8));};
+      r.readAsDataURL(f);
+    });
+    p.logos.push(compressed);
+    done++;
+  }
+  try{await upsert('products',p.id,p);renderLogosGrid(p,'pd-logos-grid');toast('Logo aggiunto');}catch(err){}
+  e.target.value='';
+}
+
+async function handleModalLogos(e){
+  const files=Array.from(e.target.files);
+  for(const f of files){
+    const compressed=await new Promise(res=>{
+      const r=new FileReader();
+      r.onload=async ev=>{res(await compressImg(ev.target.result,600,0.8));};
+      r.readAsDataURL(f);
+    });
+    pendingModalLogos.push(compressed);
+  }
+  renderModalLogosGrid(pendingModalLogos);
+  e.target.value='';
+}
+
+async function removeLogo(pid,idx){
+  const p=products.find(x=>x.id===pid);if(!p)return;
+  if(!confirm('Eliminare questo logo?'))return;
+  p.logos.splice(idx,1);
+  try{await upsert('products',p.id,p);renderLogosGrid(p,'pd-logos-grid');toast('Logo rimosso');}catch(err){}
+}
+
+</script>
+</body>
+</html>
