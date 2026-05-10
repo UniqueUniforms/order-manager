@@ -1904,12 +1904,13 @@ async function exportRicamatore(){
         if(!idOrName)return null;
         // Try by ID first
         if(rmapObj[idOrName])return rmapObj[idOrName];
-        // Try by name match (case-insensitive, trimmed)
+        // Try by name match — the stored code (e.g. "UNIFORM35A") must match
+        // the beginning of the ricamo name (e.g. "UNIFORM35A  25X9,1")
         const q=idOrName.trim().toLowerCase();
-        return ricami.find(r=>(r.name||'').trim().toLowerCase()===q||
-          (r.name||'').trim().toLowerCase().startsWith(q)||
-          q.startsWith((r.name||'').trim().toLowerCase().split(' ')[0])
-        )||null;
+        return ricami.find(r=>{
+          const rn=(r.name||'').trim().toLowerCase();
+          return rn===q||rn.startsWith(q+' ')||rn.startsWith(q+'\t')||rn.split(/\s+/)[0]===q;
+        })||null;
       };
       for(const [key,label] of [
         ['embFrontRicamo','Fronte'],['embFront','Fronte'],
