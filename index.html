@@ -1891,15 +1891,30 @@ async function exportRicamatore(){
       const prodSizes=ALL_SZ.filter(s=>+sz[s]>0);
       const tot=prodSizes.reduce((a,s)=>a+(+sz[s]||0),0);
 
-      // Collect ricami — check all possible field names
+      // Collect ricami — by ID, or by name match if no ID linked
       const ricamiPositions=[];
+      const findRicamo=(idOrName)=>{
+        if(!idOrName)return null;
+        // Try by ID first
+        if(rmapObj[idOrName])return rmapObj[idOrName];
+        // Try by name match (case-insensitive, trimmed)
+        const q=idOrName.trim().toLowerCase();
+        return ricami.find(r=>(r.name||'').trim().toLowerCase()===q||
+          (r.name||'').trim().toLowerCase().startsWith(q)||
+          q.startsWith((r.name||'').trim().toLowerCase().split(' ')[0])
+        )||null;
+      };
       for(const [key,label] of [
-        ['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba/braccio'],
-        ['ricamoId','Ricamo'] // legacy field
+        ['embFrontRicamo','Fronte'],['embFront','Fronte'],
+        ['embBackRicamo','Retro'],['embBack','Retro'],
+        ['embOtherRicamo','Gamba/braccio'],['embOther','Gamba/braccio'],
+        ['ricamoId','Ricamo']
       ]){
-        const rid=p[key];
-        if(rid&&rmapObj[rid]){
-          ricamiPositions.push({label,ric:rmapObj[rid]});
+        const val=p[key];
+        if(!val)continue;
+        const ric=findRicamo(val);
+        if(ric&&!ricamiPositions.find(x=>x.ric.id===ric.id)){
+          ricamiPositions.push({label,ric});
         }
       }
 
