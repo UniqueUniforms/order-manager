@@ -533,6 +533,11 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
         <button class="btn btn-p" style="width:100%;margin-top:8px;justify-content:center" onclick="addPRow()">🔍 Cerca e aggiungi prodotto dal catalogo</button>
         <button class="btn btn-g" style="width:100%;margin-top:6px;justify-content:center" onclick="document.getElementById('excel-import-input').click()">📥 Importa quantità da Excel (REFERENCE + QTY)</button>
         <input type="file" id="excel-import-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFromExcel(event)">
+        <div id="import-warning" style="display:none;margin-top:8px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:var(--r);padding:10px 12px">
+          <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:6px">⚠️ Questi codici dal file Excel non sono stati trovati nel catalogo:</div>
+          <div id="import-warning-list" style="font-size:12px;color:#92400E;font-family:monospace;line-height:1.8"></div>
+          <div style="font-size:11px;color:#B45309;margin-top:6px">Crea prima questi prodotti nel Catalogo e poi reimporta il file.</div>
+        </div>
         <button class="btn" style="width:100%;margin-top:6px;justify-content:center;color:var(--txt2)" onclick="addManualRow()">+ Aggiungi prodotto manuale (campione/nota)</button>
       </div>
       <div class="mf">
@@ -1073,6 +1078,7 @@ function openEditOrdById(id){
 }
 function openNewOrder(){
   editingOrdId=null;$('ord-modal-title').textContent='Nuovo ordine';$('ord-del-btn').style.display='none';
+  const iw=$('import-warning');if(iw)iw.style.display='none';
   fillStatusSelects();fillStampatoreSelect('o-dest');fillSupplierDropdowns();
   $('o-date').value=new Date().toISOString().split('T')[0];
   ['o-num','o-school','o-desc','o-pom','o-notes','o-deadline'].forEach(id=>{$(id).value='';});
@@ -2350,10 +2356,18 @@ async function importFromExcel(e){
     }
     renderOrderRows();
 
-    let msg=`✅ Importati ${Object.keys(grouped).length} prodotti (${matched} righe)`;
-    if(unmatched.length) msg+=` — ${unmatched.length} codici non trovati: ${unmatched.slice(0,3).join(', ')}${unmatched.length>3?'...':''}`;
-    toast(msg, 5000);
-    if(unmatched.length) console.log('Codici Excel non trovati nel catalogo:', unmatched);
+    // Show results
+    toast(`✅ Importati ${Object.keys(grouped).length} prodotti da ${matched} righe`);
+    // Show warning for unmatched codes
+    const warnDiv=document.getElementById('import-warning');
+    const warnList=document.getElementById('import-warning-list');
+    if(unmatched.length&&warnDiv&&warnList){
+      warnList.innerHTML=unmatched.map(c=>`• ${c}`).join('<br>');
+      warnDiv.style.display='block';
+      console.log('Codici Excel non trovati nel catalogo:', unmatched);
+    } else if(warnDiv){
+      warnDiv.style.display='none';
+    }
 
   }catch(err){
     console.error(err);
