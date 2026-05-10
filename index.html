@@ -1811,169 +1811,192 @@ async function exportRicamatore(){
     const orderProds=(o.products||[]).filter(pr=>!pr.manual&&map[pr.pid]&&Object.values(pr.sizes||{}).some(v=>+v>0));
     const usedSizes=ALL_SZ.filter(s=>orderProds.some(pr=>+((pr.sizes||{})[s]||0)>0));
 
-    const hdrInfo=`Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}${o.dest?' &nbsp;|&nbsp; Dest: '+o.dest:''}`;
-    const title=`${o.school||''}${o.desc?' — '+o.desc:''}`;
+    const CSS=`
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;font-size:12px;background:#f1f5f9;padding:20px;}
+      .page{background:white;max-width:1000px;margin:0 auto 28px;box-shadow:0 2px 12px rgba(0,0,0,.12);}
+      h1{font-size:16px;font-weight:bold;margin-bottom:2px;}
+      .hdr{background:#1A1A2E;color:#fff;padding:13px 18px;}
+      .hdr2{background:#374151;color:#CBD5E1;padding:6px 18px;font-size:11px;}
+      .stitle{background:#1A1A2E;color:#fff;padding:9px 14px;font-size:13px;font-weight:bold;}
+      .ptitle{background:#2563EB;color:#fff;padding:9px 14px;font-size:13px;font-weight:bold;}
+      .section{padding:14px;}
+      table{border-collapse:collapse;width:100%;}
+      .rt th{background:#2563EB;color:#fff;padding:7px 10px;text-align:center;font-size:11px;border:1px solid #1d4ed8;}
+      .rt th.l{text-align:left;}
+      .rt td{padding:7px 10px;border:1px solid #CBD5E1;text-align:center;font-size:12px;}
+      .rt td.n{text-align:left;}
+      .rt tr:nth-child(even) td{background:#EFF6FF;}
+      .rt td.tot{background:#2563EB;color:#fff;font-weight:bold;}
+      .rt tr.grand td{background:#1A1A2E;color:#fff;font-weight:bold;}
+      .notes-editable{width:100%;min-height:60px;border:2px dashed #FCD34D;background:#FFFBEB;padding:10px;font-family:Arial,sans-serif;font-size:12px;color:#92400E;outline:none;display:block;}
+      .notes-label{background:#FFFBEB;border:2px dashed #FCD34D;border-bottom:none;padding:8px 12px;font-size:11px;font-weight:bold;color:#92400E;}
+      .prod-body{display:grid;grid-template-columns:170px 1fr 1fr;border:1px solid #e2e8f0;border-top:none;}
+      .imgs-col{border-right:1px solid #e2e8f0;padding:12px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;gap:10px;}
+      .imgs-col img{max-width:150px;max-height:150px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:4px;}
+      .img-lbl{font-size:10px;color:#64748b;font-style:italic;text-align:center;margin-top:2px;}
+      .sep{font-size:10px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:.05em;padding:4px 0;border-bottom:1px solid #e2e8f0;margin:6px 0 4px;width:100%;text-align:center;}
+      .logos-wrap{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
+      .logo-item{text-align:center;}
+      .logo-item img{max-width:100px;max-height:100px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:2px;border-radius:3px;display:block;}
+      .details-col{border-right:1px solid #e2e8f0;display:flex;flex-direction:column;}
+      .dt td{padding:5px 8px;border-bottom:1px solid #f0f0f0;font-size:11px;vertical-align:top;}
+      .dt td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;width:44%;white-space:nowrap;}
+      .dt td.code{color:#1e40af;font-family:monospace;font-weight:bold;}
+      .dt td.ric-hdr{background:#EFF6FF;color:#1e40af;font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding-top:7px;}
+      .right-col{display:flex;flex-direction:column;}
+      .st{border-top:2px solid #1A1A2E;margin-top:auto;}
+      .st th{background:#1A1A2E;color:#fff;padding:7px 8px;text-align:center;font-size:11px;border:1px solid #374151;}
+      .st th.l{text-align:left;}
+      .st td{padding:10px 8px;border:1px solid #CBD5E1;text-align:center;font-size:14px;font-weight:bold;}
+      .st td.art{text-align:left;font-size:11px;font-weight:normal;background:#F8FAFC;}
+      .st td.tot{background:#2563EB;color:#fff;font-size:16px;}
+      .note-prod-label{background:#F1F5F9;padding:6px 10px;font-size:10px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:.04em;border-top:1px solid #e2e8f0;}
+      .note-prod-editable{width:100%;min-height:50px;border:none;border-top:1px dashed #CBD5E1;background:#FAFAFA;padding:8px 10px;font-family:Arial,sans-serif;font-size:12px;color:#374151;outline:none;display:block;resize:vertical;}
+      .print-btn{display:block;margin:0 auto 20px;padding:10px 28px;background:#2563EB;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;}
+      @media print{body{background:white;padding:0;}.page{box-shadow:none;margin:0;}.print-btn{display:none;}@page{margin:1cm;}.page{page-break-after:always;}.page:last-child{page-break-after:auto;}}
+    `;
 
-    // ════════════════════════════════════════════════
-    // FILE 1: Excel (.xls) — solo testo, nessuna immagine
-    // ════════════════════════════════════════════════
-    const XCSS=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;}
-    h1{font-size:15px;font-weight:bold;margin-bottom:3px;}.hdr{background:#1A1A2E;color:#fff;padding:12px 18px;}
-    .hdr2{background:#374151;color:#CBD5E1;padding:6px 18px;font-size:11px;margin-bottom:0;}
-    .section{padding:14px;}.stitle{background:#1A1A2E;color:#fff;padding:9px 14px;font-size:12px;font-weight:bold;}
-    .ptitle{background:#2563EB;color:#fff;padding:9px 14px;font-size:12px;font-weight:bold;margin-bottom:0;}
-    table{border-collapse:collapse;width:100%;margin-bottom:0;}
-    th{background:#2563EB;color:#fff;padding:7px 10px;text-align:center;font-size:11px;border:1px solid #1d4ed8;}
-    th.l{text-align:left;}td{padding:7px 10px;border:1px solid #CBD5E1;font-size:12px;text-align:center;}
-    td.n{text-align:left;}td.tot{background:#2563EB;color:#fff;font-weight:bold;}
-    tr.grand td{background:#1A1A2E;color:#fff;font-weight:bold;}
-    .notes-row td{background:#FFFBEB!important;border:2px dashed #FCD34D!important;padding:14px 10px!important;color:#92400E;font-size:11px;font-style:italic;}
-    .dt th{background:#374151;}.dt td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;text-align:left;width:40%;}
-    .dt td.vl{text-align:left;}.dt td.code{color:#1e40af;font-family:monospace;font-weight:bold;text-align:left;}
-    .prod-block{margin-bottom:24px;border:1px solid #e2e8f0;}`;
+    const hdrHTML=`<div class="hdr"><h1>${o.school||''}${o.desc?' — '+o.desc:''}</h1></div><div class="hdr2">Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}${o.dest?' &nbsp;|&nbsp; Dest: '+o.dest:''}</div>`;
 
-    let xls=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${XCSS}</style></head><body>`;
-    xls+=`<div class="hdr"><h1>${title}</h1></div><div class="hdr2">${hdrInfo}</div>`;
-    xls+=`<div class="section"><div class="stitle">RIEPILOGO QUANTITÀ TOTALI</div>`;
-    xls+=`<table><thead><tr><th class="l">Prodotto</th>${usedSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead><tbody>`;
+    let htm=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${o.school||'Ordine'} — ${o.num||''}</title><style>${CSS}</style></head><body>`;
+    htm+=`<button class="print-btn" onclick="window.print()">🖨️ Stampa / Salva PDF</button>`;
+
+    // ── PAGINA 1: RIEPILOGO ──
+    htm+=`<div class="page">${hdrHTML}<div class="section">`;
+    htm+=`<div class="stitle">RIEPILOGO QUANTITÀ TOTALI</div>`;
+    htm+=`<table class="rt"><thead><tr><th class="l">Modello / Articolo</th>${usedSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead><tbody>`;
     const grand={};usedSizes.forEach(s=>grand[s]=0);
     for(const pr of orderProds){
       const p=map[pr.pid]||{};const sz=pr.sizes||{};let rt=0;
-      xls+=`<tr><td class="n">${p.desc||'—'} — ${p.article||''} ${p.color||''}</td>`;
-      usedSizes.forEach(s=>{const v=+sz[s]||0;grand[s]+=v;rt+=v;xls+=`<td>${v||''}</td>`;});
-      xls+=`<td class="tot">${rt}</td></tr>`;
+      htm+=`<tr><td class="n"><strong>${p.desc||'—'}</strong><br><span style="font-size:11px;color:#64748b">${p.article||''} ${p.color||''}</span></td>`;
+      usedSizes.forEach(s=>{const v=+sz[s]||0;grand[s]+=v;rt+=v;htm+=`<td>${v||''}</td>`;});
+      htm+=`<td class="tot">${rt}</td></tr>`;
     }
     (o.products||[]).filter(pr=>pr.manual).forEach(pr=>{
-      xls+=`<tr><td class="n" colspan="${usedSizes.length+2}" style="color:#64748b;font-style:italic">📝 ${pr.note||''}</td></tr>`;
+      htm+=`<tr><td class="n" colspan="${usedSizes.length+2}" style="color:#64748b;font-style:italic">📝 ${pr.note||''}</td></tr>`;
     });
     let gt=0;usedSizes.forEach(s=>gt+=grand[s]||0);
-    xls+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:14px">${gt}</td></tr>`;
-    xls+=`<tr class="notes-row"><td colspan="${usedSizes.length+2}">📝 &nbsp;<strong>Note / Istruzioni aggiuntive:</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td></tr>`;
-    xls+=`</tbody></table></div>`;
+    htm+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:15px">${gt}</td></tr>`;
+    htm+=`</tbody></table>`;
+    // Note modificabile nel riepilogo
+    htm+=`<div style="margin-top:14px"><div class="notes-label">📝 NOTE / ISTRUZIONI AGGIUNTIVE (campo modificabile):</div><div class="notes-editable" contenteditable="true" data-placeholder="Scrivi qui note, istruzioni di spedizione o dettagli particolari..."></div></div>`;
+    htm+=`</div></div>`;
 
-    // Dettaglio testuale per ogni prodotto (senza immagini)
+    // ── PAGINE PRODOTTI ──
     for(let pi=0;pi<orderProds.length;pi++){
-      const pr=orderProds[pi];const p=map[pr.pid]||{};const sz=pr.sizes||{};
+      const pr=orderProds[pi];
+      const p=map[pr.pid]||{};
+      const sz=pr.sizes||{};
       const prodSizes=ALL_SZ.filter(s=>+sz[s]>0);
       const tot=prodSizes.reduce((a,s)=>a+(+sz[s]||0),0);
-      xls+=`<div class="section"><div class="prod-block">`;
-      xls+=`<div class="ptitle">${pi+1}/${orderProds.length} — ${p.desc||'—'}</div>`;
-      const rows=[];
-      if(p.article)rows.push(['Articolo',p.article,'']);
-      if(p.color)rows.push(['Colore',p.color,'']);
-      if(p.uu)rows.push(['Codice UU',p.uu,'code']);
-      if(p.school)rows.push(['Scuola',p.school,'']);
-      if(p.custom)rows.push(['Personalizzazione',p.custom,'']);
-      for(const [key,label] of [['embFrontRicamo','Fronte ricamo'],['embBackRicamo','Retro ricamo'],['embOtherRicamo','Gamba/braccio']]){
-        const rid=p[key];if(rid&&rmapObj[rid]){const ric=rmapObj[rid];
-          rows.push([label+' — codice',ric.name||'—','code']);
-          if(ric.colors)rows.push([label+' — colori filo',(ric.colors||'').split('\n').join(' | '),'']);
+
+      // Collect ricami — check all possible field names
+      const ricamiPositions=[];
+      for(const [key,label] of [
+        ['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba/braccio'],
+        ['ricamoId','Ricamo'] // legacy field
+      ]){
+        const rid=p[key];
+        if(rid&&rmapObj[rid]){
+          ricamiPositions.push({label,ric:rmapObj[rid]});
         }
       }
-      xls+=`<table class="dt"><tbody>${rows.map(([k,v,cls])=>`<tr><td class="lb">${k}</td><td class="vl ${cls}">${v}</td></tr>`).join('')}</tbody></table>`;
-      xls+=`<table style="margin-top:4px"><thead><tr><th class="l" style="background:#1A1A2E">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
-      xls+=`<tbody><tr><td class="n">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
-      xls+=`</div></div>`;
-    }
-    xls+=`</body></html>`;
 
-    // Download Excel
-    const b1=new Blob([xls],{type:'application/vnd.ms-excel;charset=utf-8'});
-    const u1=URL.createObjectURL(b1);
-    const a1=document.createElement('a');
-    const sn=(o.school||'ordine').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20);
-    const dateStr=(o.date||'').replace(/-/g,'');
-    a1.href=u1;a1.download=`ricamatore_${sn}_${dateStr}.xls`;a1.click();
-    URL.revokeObjectURL(u1);
-
-    // ════════════════════════════════════════════════
-    // FILE 2: HTML con immagini — apri nel browser
-    // ════════════════════════════════════════════════
-    await new Promise(r=>setTimeout(r,500)); // small delay between downloads
-
-    const HCSS=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;background:#f1f5f9;padding:20px;}
-    .page{background:white;max-width:960px;margin:0 auto 30px;box-shadow:0 2px 12px rgba(0,0,0,.12);}
-    h1{font-size:15px;font-weight:bold;margin-bottom:3px;}.hdr{background:#1A1A2E;color:#fff;padding:12px 18px;}
-    .hdr2{background:#374151;color:#CBD5E1;padding:6px 18px;font-size:11px;}
-    .ptitle{background:#2563EB;color:#fff;padding:9px 14px;font-size:13px;font-weight:bold;}
-    .mg{display:grid;grid-template-columns:190px 1fr 220px;}
-    .ic{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
-    .ib{padding:10px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px;text-align:center;}
-    .ib img{max-width:165px;max-height:165px;object-fit:contain;}
-    .il{font-size:10px;color:#94A3B8;margin-top:5px;font-style:italic;}
-    .lc{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px;background:#F8FAFC;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;min-height:190px;}
-    .li{text-align:center;max-width:130px;}
-    .li img{max-width:125px;max-height:125px;object-fit:contain;display:block;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:3px;}
-    .li .il{max-width:125px;word-break:break-word;}
-    .no-img{display:flex;align-items:center;justify-content:center;width:100%;color:#94A3B8;font-style:italic;font-size:11px;}
-    .dc{border-bottom:1px solid #e2e8f0;}
-    .dc table{width:100%;border-collapse:collapse;}
-    .dc td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;vertical-align:top;}
-    .dc td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;width:48%;}
-    .dc td.code{color:#1e40af;font-family:monospace;font-weight:bold;}
-    table.st{border-collapse:collapse;width:100%;border-top:2px solid #1A1A2E;}
-    .st th{background:#1A1A2E;color:#fff;padding:8px 10px;text-align:center;font-size:11px;border:1px solid #374151;}
-    .st th.l{text-align:left;}.st td{padding:9px 10px;border:1px solid #CBD5E1;text-align:center;font-size:13px;font-weight:bold;}
-    .st td.art{text-align:left;font-size:12px;background:#F8FAFC;font-weight:normal;}
-    .st td.tot{background:#2563EB;color:#fff;font-size:14px;}
-    @media print{.page{box-shadow:none;margin-bottom:0;}body{background:white;padding:0;}@page{margin:1cm;}}`;
-
-    const hdrHTML=`<div class="hdr"><h1>${title}</h1></div><div class="hdr2">${hdrInfo}</div>`;
-
-    let htm=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>${HCSS}</style></head><body>`;
-
-    for(let pi=0;pi<orderProds.length;pi++){
-      const pr=orderProds[pi];const p=map[pr.pid]||{};const sz=pr.sizes||{};
-      const prodSizes=ALL_SZ.filter(s=>+sz[s]>0);
-      const tot=prodSizes.reduce((a,s)=>a+(+sz[s]||0),0);
-
+      // Collect logo images from product
       const logoImgs=[];
-      if(p.logos&&p.logos.length)p.logos.forEach((img,idx)=>{if(img)logoImgs.push({src:img,label:`Logo/Stampa${p.logos.length>1?' '+(idx+1):''}`.trim()});});
-      for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba']]) {
-        const rid=p[key];if(rid&&rmapObj[rid]&&rmapObj[rid].img)logoImgs.push({src:rmapObj[rid].img,label:`${label}: ${rmapObj[rid].name}`});
+      if(p.logos&&p.logos.length){
+        p.logos.forEach((img,idx)=>{
+          if(img)logoImgs.push({src:img,label:`Logo/Stampa${p.logos.length>1?' '+(idx+1):''}`.trim()});
+        });
       }
-      const prodImg=getProdImg(p);
+      // Add ricamo images
+      ricamiPositions.forEach(({label,ric})=>{
+        if(ric.img)logoImgs.push({src:ric.img,label:`${label}: ${ric.name}`});
+      });
 
-      const detRows=[];
-      if(p.article)detRows.push(['Articolo',p.article,'']);
-      if(p.color)detRows.push(['Colore',p.color,'']);
-      if(p.uu)detRows.push(['Codice UU',p.uu,'code']);
-      if(p.school)detRows.push(['Scuola',p.school,'']);
-      if(p.custom)detRows.push(['Personalizzazione',p.custom,'']);
-      for(const [key,label] of [['embFrontRicamo','Fronte ricamo'],['embBackRicamo','Retro ricamo'],['embOtherRicamo','Gamba/braccio']]){
-        const rid=p[key];if(rid&&rmapObj[rid]){const ric=rmapObj[rid];
-          detRows.push([label+' — codice',ric.name||'—','code']);
-          if(ric.colors)detRows.push([label+' — colori filo',(ric.colors||'').split('\n').join('<br>'),'']);
-        }
-      }
+      const prodImg=getProdImg(p);
 
       htm+=`<div class="page">${hdrHTML}`;
       htm+=`<div class="ptitle">${pi+1} / ${orderProds.length} &nbsp;—&nbsp; ${p.desc||'—'}</div>`;
-      htm+=`<div class="mg">`;
-      htm+=`<div class="ic"><div class="ib">${prodImg?`<img src="${prodImg}" alt="capo">`:'<span class="no-img">Nessuna<br>foto capo</span>'}<div class="il">Immagine capo</div></div></div>`;
-      htm+=`<div class="lc">${logoImgs.length?logoImgs.map(li=>`<div class="li"><img src="${li.src}" alt="logo"><div class="il">${li.label}</div></div>`).join(''):'<span class="no-img">Nessuna immagine<br>logo / stampa</span>'}</div>`;
-      htm+=`<div class="dc"><table>${detRows.map(([k,v,cls])=>`<tr><td class="lb">${k}</td><td class="${cls||''}">${v}</td></tr>`).join('')}</table></div>`;
+      htm+=`<div class="prod-body">`;
+
+      // Col 1: immagini
+      htm+=`<div class="imgs-col">`;
+      htm+=`<div class="sep">Foto capo</div>`;
+      if(prodImg){
+        htm+=`<div><img src="${prodImg}" alt="capo"><div class="img-lbl">Immagine capo</div></div>`;
+      } else {
+        htm+=`<div style="color:#94A3B8;font-style:italic;font-size:11px;text-align:center">Nessuna foto capo</div>`;
+      }
+      if(logoImgs.length){
+        htm+=`<div class="sep">Loghi / Ricami</div>`;
+        htm+=`<div class="logos-wrap">`;
+        logoImgs.forEach(li=>{
+          htm+=`<div class="logo-item"><img src="${li.src}" alt="logo"><div class="img-lbl">${li.label}</div></div>`;
+        });
+        htm+=`</div>`;
+      }
       htm+=`</div>`;
+
+      // Col 2: dettagli articolo + ricami
+      htm+=`<div class="details-col"><table class="dt"><tbody>`;
+      if(p.article) htm+=`<tr><td class="lb">Modello</td><td>${p.article}</td></tr>`;
+      if(p.color)   htm+=`<tr><td class="lb">Colore</td><td>${p.color}</td></tr>`;
+      if(p.num||o.num) htm+=`<tr><td class="lb">N° Ordine</td><td class="code">${o.num||'—'}</td></tr>`;
+      if(p.uu)      htm+=`<tr><td class="lb">Codice UU</td><td class="code">${p.uu}</td></tr>`;
+      if(p.school)  htm+=`<tr><td class="lb">Scuola</td><td>${p.school}</td></tr>`;
+      if(p.custom)  htm+=`<tr><td class="lb">Personalizzazione</td><td>${p.custom}</td></tr>`;
+      // Ricami details
+      ricamiPositions.forEach(({label,ric})=>{
+        htm+=`<tr><td class="ric-hdr" colspan="2">🧵 ${label}: ${ric.name}</td></tr>`;
+        if(ric.colors){
+          const colLines=(ric.colors||'').split('\n').filter(Boolean);
+          colLines.forEach(c=>{htm+=`<tr><td class="lb">Colore filo</td><td>${c}</td></tr>`;});
+        }
+      });
+      htm+=`</tbody></table></div>`;
+
+      // Col 3: taglie + note
+      htm+=`<div class="right-col">`;
       htm+=`<table class="st"><thead><tr><th class="l">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
       htm+=`<tbody><tr><td class="art">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
+      // Note modificabile per prodotto
+      htm+=`<div class="note-prod-label">📝 Note interne (modificabile):</div>`;
+      htm+=`<div class="note-prod-editable" contenteditable="true" data-placeholder="Aggiungi note interne per questo articolo..."></div>`;
       htm+=`</div>`;
+
+      htm+=`</div></div>`;
     }
+
+    // Placeholder text for contenteditable
+    htm+=`<script>
+      document.querySelectorAll('[contenteditable]').forEach(el=>{
+        if(el.dataset.placeholder&&!el.textContent.trim()){
+          el.style.color='#94A3B8';el.textContent=el.dataset.placeholder;
+        }
+        el.addEventListener('focus',function(){if(this.textContent===this.dataset.placeholder){this.textContent='';this.style.color='#374151';}});
+        el.addEventListener('blur',function(){if(!this.textContent.trim()){this.style.color='#94A3B8';this.textContent=this.dataset.placeholder;}});
+      });
+    </scr`+`ipt>`;
+    htm+=`<button class="print-btn" onclick="window.print()" style="margin-top:20px">🖨️ Stampa / Salva PDF</button>`;
     htm+=`</body></html>`;
 
-    const b2=new Blob([htm],{type:'text/html;charset=utf-8'});
-    const u2=URL.createObjectURL(b2);
-    const a2=document.createElement('a');
-    a2.href=u2;a2.download=`immagini_${sn}_${dateStr}.html`;a2.click();
-    URL.revokeObjectURL(u2);
-
-    toast('📥 2 file scaricati: Excel (testo) + HTML (immagini)');
+    const blob=new Blob([htm],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const sn=(o.school||'ordine').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20);
+    a.href=url;a.download=`ordine_${sn}_${(o.date||'').replace(/-/g,'')}.html`;
+    a.click();URL.revokeObjectURL(url);
+    toast('📥 File scaricato! Aprilo nel browser.');
   }catch(e){
-    console.error(e);
-    toast('Errore: '+e.message.slice(0,80));
+    console.error(e);toast('Errore: '+e.message.slice(0,80));
   }finally{
     if(btn){btn.disabled=false;btn.innerHTML=origHTML;}
   }
 }
+
+
 
 
 
