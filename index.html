@@ -1833,34 +1833,35 @@ async function exportRicamatore(){
       .notes-editable:focus{border-color:#D97706;background:#FFF9EB;}
       .notes-label{background:#FEF3C7;border:2px dashed #F59E0B;border-bottom:none;padding:8px 12px;font-size:11px;font-weight:bold;color:#92400E;}
       .notes-hint{font-size:10px;color:#D97706;font-style:italic;padding:3px 12px 6px;background:#FFFBEB;border:2px dashed #F59E0B;border-top:none;}
-      .prod-body{display:grid;grid-template-columns:170px 1fr 1fr;border:1px solid #e2e8f0;border-top:none;}
-      .imgs-col{border-right:1px solid #e2e8f0;padding:12px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;gap:10px;}
-      .imgs-col img{max-width:150px;max-height:150px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:4px;}
+      .prod-body{display:grid;grid-template-columns:190px 1fr 240px;border:1px solid #e2e8f0;border-top:none;align-items:start;}
+      .imgs-col{border-right:1px solid #e2e8f0;padding:10px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;gap:8px;}
+      .imgs-col img{max-width:160px;max-height:160px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:4px;}
       .img-lbl{font-size:10px;color:#64748b;font-style:italic;text-align:center;margin-top:2px;}
-      .sep{font-size:10px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:.05em;padding:4px 0;border-bottom:1px solid #e2e8f0;margin:6px 0 4px;width:100%;text-align:center;}
-      .logos-wrap{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
+      .sep{font-size:10px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:.05em;padding:3px 0;border-bottom:1px solid #e2e8f0;margin:4px 0 3px;width:100%;text-align:center;}
+      .logos-wrap{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;}
       .logo-item{text-align:center;}
-      .logo-item img{max-width:100px;max-height:100px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:2px;border-radius:3px;display:block;}
-      .details-col{border-right:1px solid #e2e8f0;display:flex;flex-direction:column;}
+      .logo-item img{max-width:80px;max-height:80px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:2px;border-radius:3px;display:block;}
+      .details-col{border-right:1px solid #e2e8f0;}
+      .dt{width:100%;border-collapse:collapse;}
       .dt td{padding:5px 8px;border-bottom:1px solid #f0f0f0;font-size:11px;vertical-align:top;}
-      .dt td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;width:44%;white-space:nowrap;}
+      .dt td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;width:42%;white-space:nowrap;}
       .dt td.code{color:#1e40af;font-family:monospace;font-weight:bold;}
-      .dt td.ric-hdr{background:#EFF6FF;color:#1e40af;font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding-top:7px;}
+      .dt td.ric-hdr{background:#EFF6FF;color:#1e40af;font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding-top:6px;}
       .right-col{display:flex;flex-direction:column;}
-      .st{border-top:2px solid #1A1A2E;margin-top:auto;}
-      .st th{background:#1A1A2E;color:#fff;padding:7px 8px;text-align:center;font-size:11px;border:1px solid #374151;}
+      .st{border-top:2px solid #1A1A2E;}
+      .st th{background:#1A1A2E;color:#fff;padding:7px 6px;text-align:center;font-size:11px;border:1px solid #374151;}
       .st th.l{text-align:left;}
-      .st td{padding:10px 8px;border:1px solid #CBD5E1;text-align:center;font-size:14px;font-weight:bold;}
+      .st td{padding:9px 6px;border:1px solid #CBD5E1;text-align:center;font-size:13px;font-weight:bold;}
       .st td.art{text-align:left;font-size:11px;font-weight:normal;background:#F8FAFC;}
-      .st td.tot{background:#2563EB;color:#fff;font-size:16px;}
-      .note-prod-label{background:#F1F5F9;padding:6px 10px;font-size:10px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:.04em;border-top:1px solid #e2e8f0;}
+      .st td.tot{background:#2563EB;color:#fff;font-size:15px;}
+      .note-prod-label{background:#FEF3C7;padding:5px 8px;font-size:10px;font-weight:bold;color:#92400E;text-transform:uppercase;letter-spacing:.04em;border-top:2px dashed #F59E0B;}
       .note-prod-editable{width:100%;min-height:60px;border:none;border-top:2px dashed #F59E0B;background:#FFFBEB;padding:10px;font-family:Arial,sans-serif;font-size:12px;color:#374151;outline:none;display:block;cursor:text;}
       .note-prod-editable:focus{background:#FFF9EB;}
       .print-btn{display:block;margin:0 auto 20px;padding:10px 28px;background:#2563EB;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;}
       @media print{body{background:white;padding:0;}.page{box-shadow:none;margin:0;}.print-btn{display:none;}@page{margin:1cm;}.page{page-break-after:always;}.page:last-child{page-break-after:auto;}}
     `;
 
-    const hdrHTML=`<div class="hdr"><h1>${o.school||''}${o.desc?' — '+o.desc:''}</h1></div><div class="hdr2">Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}${o.dest?' &nbsp;|&nbsp; Dest: '+o.dest:''}</div>`;
+    const hdrHTML=`<div class="hdr"><h1>${o.school||''}${o.desc?' — '+o.desc:''}</h1></div><div class="hdr2">Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}</div>`;
 
     let htm=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${o.school||'Ordine'} — ${o.num||''}</title><style>${CSS}</style></head><body>`;
     htm+=`<button class="print-btn" onclick="window.print()">🖨️ Stampa / Salva PDF</button>`;
