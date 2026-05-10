@@ -1829,8 +1829,10 @@ async function exportRicamatore(){
       .rt tr:nth-child(even) td{background:#EFF6FF;}
       .rt td.tot{background:#2563EB;color:#fff;font-weight:bold;}
       .rt tr.grand td{background:#1A1A2E;color:#fff;font-weight:bold;}
-      .notes-editable{width:100%;min-height:60px;border:2px dashed #FCD34D;background:#FFFBEB;padding:10px;font-family:Arial,sans-serif;font-size:12px;color:#92400E;outline:none;display:block;}
-      .notes-label{background:#FFFBEB;border:2px dashed #FCD34D;border-bottom:none;padding:8px 12px;font-size:11px;font-weight:bold;color:#92400E;}
+      .notes-editable{width:100%;min-height:80px;border:2px dashed #F59E0B;background:#FFFBEB;padding:12px;font-family:Arial,sans-serif;font-size:13px;color:#374151;outline:none;display:block;cursor:text;}
+      .notes-editable:focus{border-color:#D97706;background:#FFF9EB;}
+      .notes-label{background:#FEF3C7;border:2px dashed #F59E0B;border-bottom:none;padding:8px 12px;font-size:11px;font-weight:bold;color:#92400E;}
+      .notes-hint{font-size:10px;color:#D97706;font-style:italic;padding:3px 12px 6px;background:#FFFBEB;border:2px dashed #F59E0B;border-top:none;}
       .prod-body{display:grid;grid-template-columns:170px 1fr 1fr;border:1px solid #e2e8f0;border-top:none;}
       .imgs-col{border-right:1px solid #e2e8f0;padding:12px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;gap:10px;}
       .imgs-col img{max-width:150px;max-height:150px;object-fit:contain;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:4px;}
@@ -1852,7 +1854,8 @@ async function exportRicamatore(){
       .st td.art{text-align:left;font-size:11px;font-weight:normal;background:#F8FAFC;}
       .st td.tot{background:#2563EB;color:#fff;font-size:16px;}
       .note-prod-label{background:#F1F5F9;padding:6px 10px;font-size:10px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:.04em;border-top:1px solid #e2e8f0;}
-      .note-prod-editable{width:100%;min-height:50px;border:none;border-top:1px dashed #CBD5E1;background:#FAFAFA;padding:8px 10px;font-family:Arial,sans-serif;font-size:12px;color:#374151;outline:none;display:block;resize:vertical;}
+      .note-prod-editable{width:100%;min-height:60px;border:none;border-top:2px dashed #F59E0B;background:#FFFBEB;padding:10px;font-family:Arial,sans-serif;font-size:12px;color:#374151;outline:none;display:block;cursor:text;}
+      .note-prod-editable:focus{background:#FFF9EB;}
       .print-btn{display:block;margin:0 auto 20px;padding:10px 28px;background:#2563EB;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;}
       @media print{body{background:white;padding:0;}.page{box-shadow:none;margin:0;}.print-btn{display:none;}@page{margin:1cm;}.page{page-break-after:always;}.page:last-child{page-break-after:auto;}}
     `;
@@ -1880,7 +1883,11 @@ async function exportRicamatore(){
     htm+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:15px">${gt}</td></tr>`;
     htm+=`</tbody></table>`;
     // Note modificabile nel riepilogo
-    htm+=`<div style="margin-top:14px"><div class="notes-label">📝 NOTE / ISTRUZIONI AGGIUNTIVE (campo modificabile):</div><div class="notes-editable" contenteditable="true" data-placeholder="Scrivi qui note, istruzioni di spedizione o dettagli particolari..."></div></div>`;
+    htm+=`<div style="margin-top:14px">
+      <div class="notes-label">📝 NOTE / ISTRUZIONI AGGIUNTIVE:</div>
+      <div class="notes-editable" contenteditable="true">Clicca qui per scrivere note, istruzioni di spedizione o dettagli particolari...</div>
+      <div class="notes-hint">✏️ Clicca sul campo giallo per modificarlo — le note restano visibili quando stampi o salvi PDF</div>
+    </div>`;
     htm+=`</div></div>`;
 
     // ── PAGINE PRODOTTI ──
@@ -1977,8 +1984,8 @@ async function exportRicamatore(){
       htm+=`<table class="st"><thead><tr><th class="l">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
       htm+=`<tbody><tr><td class="art">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
       // Note modificabile per prodotto
-      htm+=`<div class="note-prod-label">📝 Note interne (modificabile):</div>`;
-      htm+=`<div class="note-prod-editable" contenteditable="true" data-placeholder="Aggiungi note interne per questo articolo..."></div>`;
+      htm+=`<div class="note-prod-label">📝 NOTE INTERNE (clicca per scrivere):</div>`;
+      htm+=`<div class="note-prod-editable" contenteditable="true" style="min-height:60px;cursor:text;">Clicca qui per aggiungere note interne su questo articolo...</div>`;
       htm+=`</div>`;
 
       htm+=`</div></div>`;
@@ -1987,11 +1994,19 @@ async function exportRicamatore(){
     // Placeholder text for contenteditable
     htm+=`<script>
       document.querySelectorAll('[contenteditable]').forEach(el=>{
-        if(el.dataset.placeholder&&!el.textContent.trim()){
-          el.style.color='#94A3B8';el.textContent=el.dataset.placeholder;
-        }
-        el.addEventListener('focus',function(){if(this.textContent===this.dataset.placeholder){this.textContent='';this.style.color='#374151';}});
-        el.addEventListener('blur',function(){if(!this.textContent.trim()){this.style.color='#94A3B8';this.textContent=this.dataset.placeholder;}});
+        const placeholder=el.textContent.trim();
+        el.dataset.placeholder=placeholder;
+        el.style.color='#9CA3AF';
+        el.addEventListener('focus',function(){
+          if(this.textContent.trim()===this.dataset.placeholder){
+            this.textContent='';this.style.color='#374151';
+          }
+        });
+        el.addEventListener('blur',function(){
+          if(!this.textContent.trim()){
+            this.style.color='#9CA3AF';this.textContent=this.dataset.placeholder;
+          }
+        });
       });
     </scr`+`ipt>`;
     htm+=`<button class="print-btn" onclick="window.print()" style="margin-top:20px">🖨️ Stampa / Salva PDF</button>`;
@@ -2001,9 +2016,10 @@ async function exportRicamatore(){
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     const sn=(o.school||'ordine').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20);
-    a.href=url;a.download=`ordine_${sn}_${(o.date||'').replace(/-/g,'')}.html`;
+    const dateStr=(o.date||'').replace(/-/g,'');
+    a.href=url;a.download=`ordine_ricamatore_${sn}_${dateStr}.html`;
     a.click();URL.revokeObjectURL(url);
-    toast('📥 File scaricato! Aprilo nel browser.');
+    toast('📥 File scaricato! Aprilo nel browser per vedere le immagini e aggiungere note.');
   }catch(e){
     console.error(e);toast('Errore: '+e.message.slice(0,80));
   }finally{
