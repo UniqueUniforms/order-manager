@@ -531,6 +531,8 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
         <div class="slbl">Prodotti nell'ordine</div>
         <div id="o-plist"></div>
         <button class="btn btn-p" style="width:100%;margin-top:8px;justify-content:center" onclick="addPRow()">🔍 Cerca e aggiungi prodotto dal catalogo</button>
+        <button class="btn btn-g" style="width:100%;margin-top:6px;justify-content:center" onclick="document.getElementById('excel-import-input').click()">📥 Importa quantità da Excel (REFERENCE + QTY)</button>
+        <input type="file" id="excel-import-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFromExcel(event)">
         <button class="btn" style="width:100%;margin-top:6px;justify-content:center;color:var(--txt2)" onclick="addManualRow()">+ Aggiungi prodotto manuale (campione/nota)</button>
       </div>
       <div class="mf">
@@ -2192,6 +2194,171 @@ function duplicateProduct(id){
   fillSupplierDropdowns();
   $('modal-product').style.display='flex';
   toast('Prodotto duplicato — modifica i campi necessari e salva');
+}
+
+
+// ── IMPORTA DA EXCEL ──────────────────────────────────────────────────────────
+async function importFromExcel(e){
+  const file = e.target.files[0];
+  if(!file){return;}
+  e.target.value='';
+
+  const XLSX = window.XLSX;
+  if(!XLSX){toast('Libreria Excel non caricata');return;}
+
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    // Use first sheet
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+    if(!rows.length){toast('File vuoto');return;}
+
+    // Find header row — look for SIZE and REFERENCE and QTY columns
+    let hdrIdx = -1, sizeCol = -1, refCol = -1, qtyCol = -1;
+    for(let i=0;i<Math.min(5,rows.length);i++){
+      const row = rows[i].map(c=>(c||'').toString().toUpperCase().trim());
+      const si = row.findIndex(c=>c==='SIZE'||c==='TAGLIA'||c==='SIZE/TAGLIA');
+      const ri = row.findIndex(c=>c==='REFERENCE'||c==='REF'||c==='CODICE'||c==='SKU'||c==='REFERENCE/CODICE');
+      const qi = row.findIndex(c=>c==='QTY'||c==='QUANTITY'||c==='QUANTITA'||c==='QUANTITÀ'||c==='QTY/QUANTITA');
+      if(si>=0&&ri>=0&&qi>=0){hdrIdx=i;sizeCol=si;refCol=ri;qtyCol=qi;break;}
+    }
+
+    if(hdrIdx<0){
+      // Try auto-detect: col B=size, col C=reference, col F=qty (0-indexed: 1,2,5)
+      sizeCol=1;refCol=2;qtyCol=5;hdrIdx=0;
+      toast('Intestazioni non trovate, uso colonne B(taglia) C(reference) F(qty)');
+    }
+
+    // All sizes we know about (including numeric/junior variants)
+    const KNOWN_SIZES=[
+      '5XL','4XL','3XL','XXXL','XXL','XL','L','M','S','XS','XXS','YXS','2YXS','3YXS',
+      'UNICA','ONE SIZE',
+      // numeric
+      '14','12','10','8','6','4','2',
+      '12/14','10/12','8/10','6/8','2/4',
+      '12/13','9/11','7/8','5/6','3/4','1/2',
+    ];
+
+    // Function to extract base code by removing size suffix from reference
+    function extractBaseCode(ref, size){
+      if(!ref) return '';
+      ref = ref.toString().trim();
+      size = (size||'').toString().trim();
+
+      // Try removing size from end (with or without separator)
+      const sizeUpper = size.toUpperCase().replace(/\s+.*/,''); // handle "XS (7-8 anni)" → "XS"
+      const refUpper = ref.toUpperCase();
+
+      // Remove trailing -SIZE or SIZE
+      const patterns = [
+        new RegExp('-'+sizeUpper.replace(/[/()]/g,'\\$&')+'$','i'),
+        new RegExp(sizeUpper.replace(/[/()]/g,'\\$&')+'$','i'),
+      ];
+      for(const pat of patterns){
+        const cleaned = ref.replace(pat,'').replace(/-+$/,'');
+        if(cleaned && cleaned !== ref) return cleaned.toUpperCase();
+      }
+      return ref.toUpperCase();
+    }
+
+    // Function to match base code to a product in catalog (fuzzy)
+    function findProduct(baseCode){
+      if(!baseCode) return null;
+      const bc = baseCode.toUpperCase().replace(/[-\s]/g,'');
+
+      // Exact match on UU code
+      let found = products.find(p=>(p.uu||'').toUpperCase()===baseCode);
+      if(found) return found;
+
+      // Normalize and compare
+      found = products.find(p=>{
+        const uu = (p.uu||'').toUpperCase().replace(/[-\s]/g,'');
+        return uu === bc;
+      });
+      if(found) return found;
+
+      // Partial: base code starts with product UU (or vice versa)
+      found = products.find(p=>{
+        const uu = (p.uu||'').toUpperCase().replace(/[-\s]/g,'');
+        return uu && (bc.startsWith(uu) || uu.startsWith(bc));
+      });
+      return found||null;
+    }
+
+    // Parse data rows
+    const dataRows = rows.slice(hdrIdx+1);
+    const grouped = {}; // baseCode → {product, sizes: {size: qty}}
+    let matched=0, unmatched=[];
+
+    for(const row of dataRows){
+      const ref = (row[refCol]||'').toString().trim();
+      const rawSize = (row[sizeCol]||'').toString().trim();
+      const qty = parseInt(row[qtyCol]||0,10);
+      if(!ref||!qty||qty<=0) continue;
+
+      // Normalize size: extract just the size code
+      const sizeNorm = rawSize.toUpperCase()
+        .replace(/\s*\(.*\)/g,'')  // remove "(7-8 anni)" etc
+        .replace(/\s+/g,'')
+        .trim();
+
+      const baseCode = extractBaseCode(ref, sizeNorm);
+      const prod = findProduct(baseCode);
+
+      if(prod){
+        matched++;
+        if(!grouped[prod.id]) grouped[prod.id]={product:prod,sizes:{}};
+        // Map size to our standard sizes
+        const sizeKey = mapSize(sizeNorm);
+        grouped[prod.id].sizes[sizeKey]=(grouped[prod.id].sizes[sizeKey]||0)+qty;
+      } else {
+        if(!unmatched.includes(baseCode)) unmatched.push(baseCode);
+      }
+    }
+
+    // Map size names to our standard
+    function mapSize(s){
+      const map={'XXXL':'3XL','3':'3YXS','2YXS':'2YXS','YXS':'YXS',
+        '6':'2YXS','8':'YXS','10':'XXS', // numeric junior mapping
+        '10/12':'10/12','8/10':'8/10','6/8':'6/8','2/4':'2/4','12/14':'12/14',
+        '12/13':'12/13','9/11':'9/11','7/8':'7/8','5/6':'5/6','3/4':'3/4','1/2':'1/2',
+      };
+      return map[s]||s;
+    }
+
+    if(!Object.keys(grouped).length){
+      toast('Nessun prodotto trovato. Controlla i codici UU nel catalogo.');
+      if(unmatched.length) console.log('Codici non trovati:', unmatched);
+      return;
+    }
+
+    // Add to orderRows
+    let added=0;
+    for(const [pid,data] of Object.entries(grouped)){
+      const existing = orderRows.find(r=>r.pid===pid);
+      if(existing){
+        // Merge quantities
+        for(const [sz,qty] of Object.entries(data.sizes)){
+          existing.sizes[sz]=(+existing.sizes[sz]||0)+qty;
+        }
+      } else {
+        orderRows.push({pid,sizes:data.sizes});
+        added++;
+      }
+    }
+    renderOrderRows();
+
+    let msg=`✅ Importati ${Object.keys(grouped).length} prodotti (${matched} righe)`;
+    if(unmatched.length) msg+=` — ${unmatched.length} codici non trovati: ${unmatched.slice(0,3).join(', ')}${unmatched.length>3?'...':''}`;
+    toast(msg, 5000);
+    if(unmatched.length) console.log('Codici Excel non trovati nel catalogo:', unmatched);
+
+  }catch(err){
+    console.error(err);
+    toast('Errore lettura file: '+err.message.slice(0,80));
+  }
 }
 
 </script>
