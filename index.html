@@ -760,12 +760,29 @@ async function initApp(){
     fillStatusSelects();
     fillRicamoSelect();
     fillSupplierDropdowns();
+    // Auto-sync ogni 2 minuti
+    setInterval(async()=>{
+      try{
+        await loadAll();
+        if(currentView==='dashboard')renderDashboard();
+        if(currentView==='orders')renderOrders();
+        fillStatusSelects();fillRicamoSelect();fillSupplierDropdowns();
+        setSS('ok');
+      }catch(e){setSS('err');}
+    }, 120000);
   }catch(e){setSS('err');toast('Errore connessione: '+e.message);}
 }
 function setSS(s){
   const d=document.getElementById('sync-dot'),l=document.getElementById('sync-lbl');
   d.className='dot '+{ok:'dot-ok',err:'dot-err',load:'dot-load'}[s];
-  l.textContent={ok:'Connesso — dati live',err:'Errore connessione',load:'Connessione…'}[s];
+  l.textContent={ok:'Connesso — dati live',err:'Errore connessione — riprovo…',load:'Connessione…'}[s];
+  if(s==='err'){
+    // Auto-retry connection after 10 seconds
+    setTimeout(async()=>{
+      try{setSS('load');await loadAll();setSS('ok');renderDashboard();fillStatusSelects();fillRicamoSelect();}
+      catch(e){setSS('err');}
+    },10000);
+  }
 }
 async function loadAll(){
   const [pr,or]=await Promise.all([db.from('products').select('*'),db.from('orders').select('*')]);
@@ -806,20 +823,37 @@ function compressImg(dataUrl, maxW=800, quality=0.75){
   });
 }
 
-async function upsert(table,id,data){
+async function upsert(table,id,data,retries=3){
   setSaving(true);
   const slim={...data};
-  if(slim.images)slim.images=await Promise.all(slim.images.map(i=>i?compressImg(i,800,0.7):null));slim.images=(slim.images||[]).filter(Boolean);
-  if(slim.img)slim.img=await compressImg(slim.img,800,0.7);
-  const {error}=await db.from(table).upsert({id,data:slim,updated_at:new Date().toISOString()});
+  // Only compress base64 images — Storage URLs are already optimized
+  if(slim.images)slim.images=await Promise.all(slim.images.map(async i=>{if(!i)return null;if(i.startsWith('data:image'))return await compressImg(i,800,0.7);return i;}));slim.images=(slim.images||[]).filter(Boolean);
+  if(slim.img&&slim.img.startsWith('data:image'))slim.img=await compressImg(slim.img,800,0.7);
+  if(slim.logos)slim.logos=await Promise.all(slim.logos.map(async i=>{if(!i)return null;if(i.startsWith('data:image'))return await compressImg(i,600,0.8);return i;}));slim.logos=(slim.logos||[]).filter(Boolean);
+  let lastErr;
+  for(let attempt=0;attempt<retries;attempt++){
+    if(attempt>0)await new Promise(r=>setTimeout(r,1000*attempt));
+    const {error}=await db.from(table).upsert({id,data:slim,updated_at:new Date().toISOString()});
+    if(!error){setSaving(false);return;}
+    lastErr=error;
+    console.warn(`Upsert attempt ${attempt+1} failed:`,error.message);
+  }
   setSaving(false);
-  if(error){toast('Errore salvataggio: '+error.message);throw error;}
+  toast('Errore salvataggio dopo '+retries+' tentativi: '+lastErr.message);
+  throw lastErr;
 }
-async function del(table,id){
+async function del(table,id,retries=3){
   setSaving(true);
-  const {error}=await db.from(table).delete().eq('id',id);
+  let lastErr;
+  for(let attempt=0;attempt<retries;attempt++){
+    if(attempt>0)await new Promise(r=>setTimeout(r,1000*attempt));
+    const {error}=await db.from(table).delete().eq('id',id);
+    if(!error){setSaving(false);return;}
+    lastErr=error;
+  }
   setSaving(false);
-  if(error){toast('Errore: '+error.message);throw error;}
+  toast('Errore eliminazione: '+lastErr.message);
+  throw lastErr;
 }
 function setSaving(v){document.getElementById('saving').style.display=v?'flex':'none';}
 
@@ -1043,7 +1077,7 @@ function openNewOrder(){
   orderRows=[];renderOrderRows();$('modal-order').style.display='flex';
 }
 async function delCurrentOrd(){if(!editingOrdId||!confirm('Eliminare?'))return;try{await del('orders',editingOrdId);orders=orders.filter(o=>o.id!==editingOrdId);CM('modal-order');renderOrders();renderDashboard();toast('Ordine eliminato');}catch(e){}}
-async function delOrdById(id){if(!confirm('Eliminare?'))return;try{await del('orders',id);orders=orders.filter(o=>o.id!==id);renderOrders();renderDashboard();toast('Ordine eliminato');}catch(e){}}
+async function delOrdById(id){if(!confirm('⚠️ Eliminare definitivamente questo elemento? L\'operazione non può essere annullata.'))return;try{await del('orders',id);orders=orders.filter(o=>o.id!==id);renderOrders();renderDashboard();toast('Ordine eliminato');}catch(e){}}
 
 // ── ORDER ROWS ────────────────────────────────────────────────────────────────
 let orderRows=[];
@@ -1151,16 +1185,15 @@ async function handleGalleryFiles(files){
   if(!p.images)p.images=[];
   const toAdd=files.slice(0,4-p.images.length);
   if(!toAdd.length){toast('Massimo 4 immagini per prodotto');return;}
-  let done=0;
-  toAdd.forEach(f=>{
-    const r=new FileReader();r.onload=async ev=>{
-      p.images.push(ev.target.result);
-      if(++done===toAdd.length){
-        galleryIndex=p.images.length-1;
-        try{await upsert('products',p.id,p);renderGallery(p);toast('Foto aggiunta');}catch(er){}
-      }
-    };r.readAsDataURL(f);
-  });
+  toast('Caricamento foto…');
+  for(const f of toAdd){
+    const base64=await new Promise(res=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.readAsDataURL(f);});
+    const compressed=await compressImg(base64,800,0.7);
+    const url=await uploadToStorage(compressed,'products');
+    p.images.push(url);
+  }
+  galleryIndex=p.images.length-1;
+  try{await upsert('products',p.id,p);renderGallery(p);toast('✅ Foto aggiunta');}catch(er){}
 }
 // Drag & drop for gallery — fires handleGalleryUpload directly, no input event
 document.addEventListener('DOMContentLoaded',()=>{
@@ -1320,15 +1353,25 @@ async function saveProduct(){
   if(editingProductId){
     const p=products.find(x=>x.id===editingProductId);if(!p)return;
     Object.assign(p,{desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,sizes,logos:[...pendingModalLogos]});
-    try{await upsert('products',p.id,p);CM('modal-product');renderProdsTable();if(currentView==='product-detail')openProdDet(p.id);toast('✅ Prodotto aggiornato');}catch(e){}
+    try{
+      toast('Caricamento immagini…');
+      const pProcessed=await processProductImages(p);
+      Object.assign(p,pProcessed);
+      await upsert('products',p.id,p);CM('modal-product');renderProdsTable();if(currentView==='product-detail')openProdDet(p.id);toast('✅ Prodotto aggiornato');
+    }catch(e){toast('Errore salvataggio: '+e.message);}
   } else {
     const p={id:'p'+Date.now(),desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,sizes,logos:[...pendingModalLogos],images:[],files:[]};
     if(!p.desc){alert('Inserisci una descrizione');return;}
-    try{await upsert('products',p.id,p);products.push(p);CM('modal-product');renderDashboard();if(currentView==='products')renderProdsTable();toast('✅ Prodotto aggiunto');}catch(e){}
+    try{
+      toast('Caricamento immagini…');
+      const pProcessed=await processProductImages(p);
+      Object.assign(p,pProcessed);
+      await upsert('products',p.id,p);products.push(p);CM('modal-product');renderDashboard();if(currentView==='products')renderProdsTable();toast('✅ Prodotto aggiunto');
+    }catch(e){toast('Errore salvataggio: '+e.message);}
   }
   editingProductId=null;
 }
-async function delProdById(id){if(!confirm('Eliminare?'))return;try{await del('products',id);products=products.filter(p=>p.id!==id);renderDashboard();renderProdsTable();toast('Prodotto eliminato');}catch(e){}}
+async function delProdById(id){if(!confirm('⚠️ Eliminare definitivamente questo elemento? L\'operazione non può essere annullata.'))return;try{await del('products',id);products=products.filter(p=>p.id!==id);renderDashboard();renderProdsTable();toast('Prodotto eliminato');}catch(e){}}
 
 // ── RICAMI ────────────────────────────────────────────────────────────────────
 function renderRicami(){
@@ -1387,10 +1430,15 @@ async function saveRicamo(){
   const r={id:editingRicamoId||'r'+Date.now(),name:gv('r-name').toUpperCase(),school:gv('r-school'),colors:gv('r-colors'),notes:gv('r-notes'),price:gv('r-price'),img:pendingRicamoImg||null,fileData:pendingRicamoFile||null,fileName:currentRicamoFileName||null};
   if(editingRicamoId){const idx=ricami.findIndex(x=>x.id===editingRicamoId);if(idx>=0)ricami[idx]=r;}
   else ricami.push(r);
-  try{await upsert('ricami',r.id,r);CM('modal-ricamo');renderRicami();fillRicamoSelect();toast('✅ Programma ricamo salvato');}catch(e){}
+  try{
+    toast('Caricamento immagine ricamo…');
+    const rProcessed=await processRicamoImages(r);
+    Object.assign(r,rProcessed);
+    await upsert('ricami',r.id,r);CM('modal-ricamo');renderRicami();fillRicamoSelect();toast('✅ Programma ricamo salvato');
+  }catch(e){toast('Errore salvataggio: '+e.message);}
 }
 async function delCurrentRicamo(){if(!editingRicamoId||!confirm('Eliminare?'))return;try{await del('ricami',editingRicamoId);ricami=ricami.filter(r=>r.id!==editingRicamoId);CM('modal-ricamo');renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
-async function delRicamo(id){if(!confirm('Eliminare?'))return;try{await del('ricami',id);ricami=ricami.filter(r=>r.id!==id);renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
+async function delRicamo(id){if(!confirm('⚠️ Eliminare definitivamente questo elemento? L\'operazione non può essere annullata.'))return;try{await del('ricami',id);ricami=ricami.filter(r=>r.id!==id);renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
 function fillStatusSelects(){
@@ -1430,7 +1478,7 @@ async function saveStatus(){
     try{await upsert('statuses',s.id,s);CM('modal-status');fillStatusSelects();renderStatuses();toast('Status aggiunto');}catch(e){}
   }
 }
-async function delStatus(id){if(!confirm('Eliminare?'))return;statuses=statuses.filter(s=>s.id!==id);try{await del('statuses',id);}catch(e){}fillStatusSelects();renderStatuses();}
+async function delStatus(id){if(!confirm('⚠️ Eliminare definitivamente questo elemento? L\'operazione non può essere annullata.'))return;statuses=statuses.filter(s=>s.id!==id);try{await del('statuses',id);}catch(e){}fillStatusSelects();renderStatuses();}
 
 // ── SUPPLIERS ─────────────────────────────────────────────────────────────────
 function renderSuppliers(){
@@ -1748,7 +1796,7 @@ function loadStampatoreOptions(){
 }
 
 
-// ── EXPORT PER RICAMATORE (HTML → apri con Excel, con immagini) ─────────────
+// ── EXPORT PER RICAMATORE ────────────────────────────────────────────────────
 async function exportRicamatore(){
   if(!currentOrdId){toast('Nessun ordine aperto');return;}
   const o=orders.find(x=>x.id===currentOrdId);
@@ -1763,145 +1811,162 @@ async function exportRicamatore(){
     const orderProds=(o.products||[]).filter(pr=>!pr.manual&&map[pr.pid]&&Object.values(pr.sizes||{}).some(v=>+v>0));
     const usedSizes=ALL_SZ.filter(s=>orderProds.some(pr=>+((pr.sizes||{})[s]||0)>0));
 
-    const CSS=`
-      *{box-sizing:border-box;margin:0;padding:0;}
-      body{font-family:Arial,sans-serif;font-size:12px;}
-      h1{font-size:16px;font-weight:bold;margin-bottom:3px;}
-      .hdr{background:#1A1A2E;color:#fff;padding:14px 20px;}
-      .hdr2{background:#374151;color:#CBD5E1;padding:7px 20px;font-size:11px;margin-bottom:0;}
-      .section{padding:16px;}
-      .stitle{background:#1A1A2E;color:#fff;padding:10px 16px;font-size:13px;font-weight:bold;margin-bottom:0;}
-      .ptitle{background:#2563EB;color:#fff;padding:10px 16px;font-size:13px;font-weight:bold;}
-      table{border-collapse:collapse;width:100%;}
-      .rt th{background:#2563EB;color:#fff;padding:8px 10px;text-align:center;font-size:11px;border:1px solid #1d4ed8;}
-      .rt th.l{text-align:left;}
-      .rt td{padding:8px 10px;border:1px solid #CBD5E1;text-align:center;font-size:12px;}
-      .rt td.n{text-align:left;}
-      .rt tr:nth-child(even) td{background:#EFF6FF;}
-      .rt td.tot{background:#2563EB;color:#fff;font-weight:bold;}
-      .rt tr.grand td{background:#1A1A2E;color:#fff;font-weight:bold;}
-      .notes-row td{background:#FFFBEB!important;border:2px dashed #FCD34D!important;padding:14px 12px!important;color:#92400E;font-size:11px;font-style:italic;}
-      .mg{display:grid;grid-template-columns:180px 1fr 220px;border:1px solid #e2e8f0;border-top:none;}
-      .ic{border-right:1px solid #e2e8f0;}
-      .ib{padding:12px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;text-align:center;}
-      .ib img{max-width:155px;max-height:155px;object-fit:contain;}
-      .il{font-size:10px;color:#94A3B8;margin-top:5px;font-style:italic;}
-      .lc{border-right:1px solid #e2e8f0;padding:10px;background:#F8FAFC;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;min-height:180px;}
-      .li{text-align:center;}
-      .li img{max-width:110px;max-height:110px;object-fit:contain;display:block;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:3px;}
-      .dc table{width:100%;border-collapse:collapse;}
-      .dc td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;vertical-align:top;}
-      .dc td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#374151;width:48%;white-space:nowrap;}
-      .dc td.vl{color:#1A1A2E;}
-      .dc td.code{color:#1e40af;font-family:monospace;font-weight:bold;}
-      .st{border:1px solid #e2e8f0;border-top:2px solid #1A1A2E;}
-      .st th{background:#1A1A2E;color:#fff;padding:8px 10px;text-align:center;font-size:11px;border:1px solid #374151;}
-      .st th.l{text-align:left;}
-      .st td{padding:9px 10px;border:1px solid #CBD5E1;text-align:center;font-size:13px;font-weight:bold;}
-      .st td.art{text-align:left;font-size:12px;background:#F8FAFC;font-weight:normal;}
-      .st td.tot{background:#2563EB;color:#fff;font-size:14px;}
-      .prod-section{margin-bottom:30px;}
-    `;
+    const hdrInfo=`Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}${o.dest?' &nbsp;|&nbsp; Dest: '+o.dest:''}`;
+    const title=`${o.school||''}${o.desc?' — '+o.desc:''}`;
 
-    let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS}</style></head><body>`;
+    // ════════════════════════════════════════════════
+    // FILE 1: Excel (.xls) — solo testo, nessuna immagine
+    // ════════════════════════════════════════════════
+    const XCSS=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;}
+    h1{font-size:15px;font-weight:bold;margin-bottom:3px;}.hdr{background:#1A1A2E;color:#fff;padding:12px 18px;}
+    .hdr2{background:#374151;color:#CBD5E1;padding:6px 18px;font-size:11px;margin-bottom:0;}
+    .section{padding:14px;}.stitle{background:#1A1A2E;color:#fff;padding:9px 14px;font-size:12px;font-weight:bold;}
+    .ptitle{background:#2563EB;color:#fff;padding:9px 14px;font-size:12px;font-weight:bold;margin-bottom:0;}
+    table{border-collapse:collapse;width:100%;margin-bottom:0;}
+    th{background:#2563EB;color:#fff;padding:7px 10px;text-align:center;font-size:11px;border:1px solid #1d4ed8;}
+    th.l{text-align:left;}td{padding:7px 10px;border:1px solid #CBD5E1;font-size:12px;text-align:center;}
+    td.n{text-align:left;}td.tot{background:#2563EB;color:#fff;font-weight:bold;}
+    tr.grand td{background:#1A1A2E;color:#fff;font-weight:bold;}
+    .notes-row td{background:#FFFBEB!important;border:2px dashed #FCD34D!important;padding:14px 10px!important;color:#92400E;font-size:11px;font-style:italic;}
+    .dt th{background:#374151;}.dt td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;text-align:left;width:40%;}
+    .dt td.vl{text-align:left;}.dt td.code{color:#1e40af;font-family:monospace;font-weight:bold;text-align:left;}
+    .prod-block{margin-bottom:24px;border:1px solid #e2e8f0;}`;
 
-    // ── Header comune ──
-    const hdrtxt=`<div class="hdr"><h1>${o.school||''}${o.desc?' — '+o.desc:''}</h1></div><div class="hdr2">Fornitore: ${o.supplier||'—'} &nbsp;|&nbsp; N° Ordine: ${o.num||'—'} &nbsp;|&nbsp; Data: ${o.date||'—'}${o.dest?' &nbsp;|&nbsp; Dest: '+o.dest:''}</div>`;
-
-    // ── PAGINA 1: RIEPILOGO ──
-    html+=hdrtxt+'<div class="section"><div class="stitle">RIEPILOGO QUANTITÀ TOTALI</div>';
-    html+=`<table class="rt"><thead><tr><th class="l">Prodotto</th>${usedSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead><tbody>`;
+    let xls=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${XCSS}</style></head><body>`;
+    xls+=`<div class="hdr"><h1>${title}</h1></div><div class="hdr2">${hdrInfo}</div>`;
+    xls+=`<div class="section"><div class="stitle">RIEPILOGO QUANTITÀ TOTALI</div>`;
+    xls+=`<table><thead><tr><th class="l">Prodotto</th>${usedSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead><tbody>`;
     const grand={};usedSizes.forEach(s=>grand[s]=0);
     for(const pr of orderProds){
       const p=map[pr.pid]||{};const sz=pr.sizes||{};let rt=0;
-      html+=`<tr><td class="n">${p.desc||'—'} — ${p.article||''} ${p.color||''}</td>`;
-      usedSizes.forEach(s=>{const v=+sz[s]||0;grand[s]+=v;rt+=v;html+=`<td>${v||''}</td>`;});
-      html+=`<td class="tot">${rt}</td></tr>`;
+      xls+=`<tr><td class="n">${p.desc||'—'} — ${p.article||''} ${p.color||''}</td>`;
+      usedSizes.forEach(s=>{const v=+sz[s]||0;grand[s]+=v;rt+=v;xls+=`<td>${v||''}</td>`;});
+      xls+=`<td class="tot">${rt}</td></tr>`;
     }
-    // Manual products
     (o.products||[]).filter(pr=>pr.manual).forEach(pr=>{
-      html+=`<tr><td class="n" colspan="${usedSizes.length+2}" style="color:#64748b;font-style:italic">📝 ${pr.note||''}</td></tr>`;
+      xls+=`<tr><td class="n" colspan="${usedSizes.length+2}" style="color:#64748b;font-style:italic">📝 ${pr.note||''}</td></tr>`;
     });
     let gt=0;usedSizes.forEach(s=>gt+=grand[s]||0);
-    html+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:15px">${gt}</td></tr>`;
-    // Note row — empty, writable by recipient
-    html+=`<tr class="notes-row"><td colspan="${usedSizes.length+2}">
-      📝 &nbsp;<strong>Note / Istruzioni aggiuntive:</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-    </td></tr>`;
-    html+=`</tbody></table></div>`;
+    xls+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:14px">${gt}</td></tr>`;
+    xls+=`<tr class="notes-row"><td colspan="${usedSizes.length+2}">📝 &nbsp;<strong>Note / Istruzioni aggiuntive:</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td></tr>`;
+    xls+=`</tbody></table></div>`;
 
-    // ── PAGINE PRODOTTI ──
+    // Dettaglio testuale per ogni prodotto (senza immagini)
     for(let pi=0;pi<orderProds.length;pi++){
-      const pr=orderProds[pi];
-      const p=map[pr.pid]||{};
-      const sz=pr.sizes||{};
+      const pr=orderProds[pi];const p=map[pr.pid]||{};const sz=pr.sizes||{};
+      const prodSizes=ALL_SZ.filter(s=>+sz[s]>0);
+      const tot=prodSizes.reduce((a,s)=>a+(+sz[s]||0),0);
+      xls+=`<div class="section"><div class="prod-block">`;
+      xls+=`<div class="ptitle">${pi+1}/${orderProds.length} — ${p.desc||'—'}</div>`;
+      const rows=[];
+      if(p.article)rows.push(['Articolo',p.article,'']);
+      if(p.color)rows.push(['Colore',p.color,'']);
+      if(p.uu)rows.push(['Codice UU',p.uu,'code']);
+      if(p.school)rows.push(['Scuola',p.school,'']);
+      if(p.custom)rows.push(['Personalizzazione',p.custom,'']);
+      for(const [key,label] of [['embFrontRicamo','Fronte ricamo'],['embBackRicamo','Retro ricamo'],['embOtherRicamo','Gamba/braccio']]){
+        const rid=p[key];if(rid&&rmapObj[rid]){const ric=rmapObj[rid];
+          rows.push([label+' — codice',ric.name||'—','code']);
+          if(ric.colors)rows.push([label+' — colori filo',(ric.colors||'').split('\n').join(' | '),'']);
+        }
+      }
+      xls+=`<table class="dt"><tbody>${rows.map(([k,v,cls])=>`<tr><td class="lb">${k}</td><td class="vl ${cls}">${v}</td></tr>`).join('')}</tbody></table>`;
+      xls+=`<table style="margin-top:4px"><thead><tr><th class="l" style="background:#1A1A2E">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
+      xls+=`<tbody><tr><td class="n">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
+      xls+=`</div></div>`;
+    }
+    xls+=`</body></html>`;
+
+    // Download Excel
+    const b1=new Blob([xls],{type:'application/vnd.ms-excel;charset=utf-8'});
+    const u1=URL.createObjectURL(b1);
+    const a1=document.createElement('a');
+    const sn=(o.school||'ordine').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20);
+    const dateStr=(o.date||'').replace(/-/g,'');
+    a1.href=u1;a1.download=`ricamatore_${sn}_${dateStr}.xls`;a1.click();
+    URL.revokeObjectURL(u1);
+
+    // ════════════════════════════════════════════════
+    // FILE 2: HTML con immagini — apri nel browser
+    // ════════════════════════════════════════════════
+    await new Promise(r=>setTimeout(r,500)); // small delay between downloads
+
+    const HCSS=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;background:#f1f5f9;padding:20px;}
+    .page{background:white;max-width:960px;margin:0 auto 30px;box-shadow:0 2px 12px rgba(0,0,0,.12);}
+    h1{font-size:15px;font-weight:bold;margin-bottom:3px;}.hdr{background:#1A1A2E;color:#fff;padding:12px 18px;}
+    .hdr2{background:#374151;color:#CBD5E1;padding:6px 18px;font-size:11px;}
+    .ptitle{background:#2563EB;color:#fff;padding:9px 14px;font-size:13px;font-weight:bold;}
+    .mg{display:grid;grid-template-columns:190px 1fr 220px;}
+    .ic{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
+    .ib{padding:10px;background:#F8FAFC;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px;text-align:center;}
+    .ib img{max-width:165px;max-height:165px;object-fit:contain;}
+    .il{font-size:10px;color:#94A3B8;margin-top:5px;font-style:italic;}
+    .lc{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px;background:#F8FAFC;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;min-height:190px;}
+    .li{text-align:center;max-width:130px;}
+    .li img{max-width:125px;max-height:125px;object-fit:contain;display:block;border:1px solid #e2e8f0;background:white;padding:3px;border-radius:3px;}
+    .li .il{max-width:125px;word-break:break-word;}
+    .no-img{display:flex;align-items:center;justify-content:center;width:100%;color:#94A3B8;font-style:italic;font-size:11px;}
+    .dc{border-bottom:1px solid #e2e8f0;}
+    .dc table{width:100%;border-collapse:collapse;}
+    .dc td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;vertical-align:top;}
+    .dc td.lb{background:#F1F5F9;font-weight:bold;font-size:10px;text-transform:uppercase;color:#374151;width:48%;}
+    .dc td.code{color:#1e40af;font-family:monospace;font-weight:bold;}
+    table.st{border-collapse:collapse;width:100%;border-top:2px solid #1A1A2E;}
+    .st th{background:#1A1A2E;color:#fff;padding:8px 10px;text-align:center;font-size:11px;border:1px solid #374151;}
+    .st th.l{text-align:left;}.st td{padding:9px 10px;border:1px solid #CBD5E1;text-align:center;font-size:13px;font-weight:bold;}
+    .st td.art{text-align:left;font-size:12px;background:#F8FAFC;font-weight:normal;}
+    .st td.tot{background:#2563EB;color:#fff;font-size:14px;}
+    @media print{.page{box-shadow:none;margin-bottom:0;}body{background:white;padding:0;}@page{margin:1cm;}}`;
+
+    const hdrHTML=`<div class="hdr"><h1>${title}</h1></div><div class="hdr2">${hdrInfo}</div>`;
+
+    let htm=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>${HCSS}</style></head><body>`;
+
+    for(let pi=0;pi<orderProds.length;pi++){
+      const pr=orderProds[pi];const p=map[pr.pid]||{};const sz=pr.sizes||{};
       const prodSizes=ALL_SZ.filter(s=>+sz[s]>0);
       const tot=prodSizes.reduce((a,s)=>a+(+sz[s]||0),0);
 
-      // Collect all logo/stamp images
       const logoImgs=[];
-      if(p.logos&&p.logos.length){
-        p.logos.forEach((img,idx)=>{if(img)logoImgs.push({src:img,label:`Logo/Stampa ${p.logos.length>1?idx+1:''}`.trim()});});
+      if(p.logos&&p.logos.length)p.logos.forEach((img,idx)=>{if(img)logoImgs.push({src:img,label:`Logo/Stampa${p.logos.length>1?' '+(idx+1):''}`.trim()});});
+      for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba']]) {
+        const rid=p[key];if(rid&&rmapObj[rid]&&rmapObj[rid].img)logoImgs.push({src:rmapObj[rid].img,label:`${label}: ${rmapObj[rid].name}`});
       }
-      for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba/braccio']]){
-        const rid=p[key];
-        if(rid&&rmapObj[rid]&&rmapObj[rid].img){
-          logoImgs.push({src:rmapObj[rid].img,label:`${label}: ${rmapObj[rid].name}`});
-        }
-      }
-
       const prodImg=getProdImg(p);
 
-      html+=`${hdrtxt}<div class="section"><div class="ptitle">${pi+1} / ${orderProds.length} — ${p.desc||'—'}</div>`;
-      html+=`<div class="mg">`;
-
-      // Col 1: foto capo
-      html+=`<div class="ic"><div class="ib">${prodImg?`<img src="${prodImg}">`:'<span style="color:#94A3B8;font-style:italic;font-size:11px">Nessuna foto capo</span>'}<div class="il">Immagine capo</div></div></div>`;
-
-      // Col 2: immagini loghi
-      html+=`<div class="lc">`;
-      if(logoImgs.length){
-        logoImgs.forEach(li=>{html+=`<div class="li"><img src="${li.src}"><div class="il">${li.label}</div></div>`;});
-      } else {
-        html+=`<span style="margin:auto;color:#94A3B8;font-style:italic;font-size:12px">Nessuna immagine logo/stampa</span>`;
-      }
-      html+=`</div>`;
-
-      // Col 3: dettagli
-      const rows=[];
-      if(p.article) rows.push(['Articolo',p.article,'']);
-      if(p.color)   rows.push(['Colore',p.color,'']);
-      if(p.uu)      rows.push(['Codice UU',p.uu,'code']);
-      if(p.school)  rows.push(['Scuola',p.school,'']);
-      if(p.custom)  rows.push(['Personalizzazione',p.custom,'']);
+      const detRows=[];
+      if(p.article)detRows.push(['Articolo',p.article,'']);
+      if(p.color)detRows.push(['Colore',p.color,'']);
+      if(p.uu)detRows.push(['Codice UU',p.uu,'code']);
+      if(p.school)detRows.push(['Scuola',p.school,'']);
+      if(p.custom)detRows.push(['Personalizzazione',p.custom,'']);
       for(const [key,label] of [['embFrontRicamo','Fronte ricamo'],['embBackRicamo','Retro ricamo'],['embOtherRicamo','Gamba/braccio']]){
-        const rid=p[key];
-        if(rid&&rmapObj[rid]){
-          const ric=rmapObj[rid];
-          rows.push([label+' — codice',ric.name||'—','code']);
-          if(ric.colors)rows.push([label+' — colori filo',(ric.colors||'').split('\n').join('<br>'),'']);
+        const rid=p[key];if(rid&&rmapObj[rid]){const ric=rmapObj[rid];
+          detRows.push([label+' — codice',ric.name||'—','code']);
+          if(ric.colors)detRows.push([label+' — colori filo',(ric.colors||'').split('\n').join('<br>'),'']);
         }
       }
-      html+=`<div class="dc"><table>${rows.map(([k,v,cls])=>`<tr><td class="lb">${k}</td><td class="vl ${cls}">${v}</td></tr>`).join('')}</table></div>`;
-      html+=`</div>`;
 
-      // Tabella taglie (solo una volta)
-      html+=`<table class="st"><thead><tr><th class="l">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
-      html+=`<tbody><tr><td class="art">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
-      html+=`</div>`;
+      htm+=`<div class="page">${hdrHTML}`;
+      htm+=`<div class="ptitle">${pi+1} / ${orderProds.length} &nbsp;—&nbsp; ${p.desc||'—'}</div>`;
+      htm+=`<div class="mg">`;
+      htm+=`<div class="ic"><div class="ib">${prodImg?`<img src="${prodImg}" alt="capo">`:'<span class="no-img">Nessuna<br>foto capo</span>'}<div class="il">Immagine capo</div></div></div>`;
+      htm+=`<div class="lc">${logoImgs.length?logoImgs.map(li=>`<div class="li"><img src="${li.src}" alt="logo"><div class="il">${li.label}</div></div>`).join(''):'<span class="no-img">Nessuna immagine<br>logo / stampa</span>'}</div>`;
+      htm+=`<div class="dc"><table>${detRows.map(([k,v,cls])=>`<tr><td class="lb">${k}</td><td class="${cls||''}">${v}</td></tr>`).join('')}</table></div>`;
+      htm+=`</div>`;
+      htm+=`<table class="st"><thead><tr><th class="l">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
+      htm+=`<tbody><tr><td class="art">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
+      htm+=`</div>`;
     }
+    htm+=`</body></html>`;
 
-    html+=`</body></html>`;
+    const b2=new Blob([htm],{type:'text/html;charset=utf-8'});
+    const u2=URL.createObjectURL(b2);
+    const a2=document.createElement('a');
+    a2.href=u2;a2.download=`immagini_${sn}_${dateStr}.html`;a2.click();
+    URL.revokeObjectURL(u2);
 
-    const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    const sn=(o.school||'ordine').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20);
-    a.href=url;
-    a.download=`ricamatore_${sn}_${(o.date||'').replace(/-/g,'')}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('📥 File scaricato! Aprilo con Excel.');
+    toast('📥 2 file scaricati: Excel (testo) + HTML (immagini)');
   }catch(e){
     console.error(e);
     toast('Errore: '+e.message.slice(0,80));
@@ -1909,6 +1974,8 @@ async function exportRicamatore(){
     if(btn){btn.disabled=false;btn.innerHTML=origHTML;}
   }
 }
+
+
 
 
 
@@ -1950,17 +2017,14 @@ async function uploadLogoImages(e){
   const p=products.find(x=>x.id===currentProdId);if(!p)return;
   if(!p.logos)p.logos=[];
   const files=Array.from(e.target.files);
-  let done=0;
+  toast('Caricamento logo…');
   for(const f of files){
-    const compressed=await new Promise(res=>{
-      const r=new FileReader();
-      r.onload=async ev=>{res(await compressImg(ev.target.result,600,0.8));};
-      r.readAsDataURL(f);
-    });
-    p.logos.push(compressed);
-    done++;
+    const base64=await new Promise(res=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.readAsDataURL(f);});
+    const compressed=await compressImg(base64,600,0.8);
+    const url=await uploadToStorage(compressed,'logos');
+    p.logos.push(url);
   }
-  try{await upsert('products',p.id,p);renderLogosGrid(p,'pd-logos-grid');toast('Logo aggiunto');}catch(err){}
+  try{await upsert('products',p.id,p);renderLogosGrid(p,'pd-logos-grid');toast('✅ Logo aggiunto');}catch(err){}
   e.target.value='';
 }
 
@@ -1983,6 +2047,67 @@ async function removeLogo(pid,idx){
   if(!confirm('Eliminare questo logo?'))return;
   p.logos.splice(idx,1);
   try{await upsert('products',p.id,p);renderLogosGrid(p,'pd-logos-grid');toast('Logo rimosso');}catch(err){}
+}
+
+
+// ── SUPABASE STORAGE ──────────────────────────────────────────────────────────
+async function uploadToStorage(base64DataUrl, folder='products'){
+  if(!base64DataUrl||!base64DataUrl.startsWith('data:image'))return base64DataUrl;
+  try{
+    // Convert base64 to blob
+    const res=await fetch(base64DataUrl);
+    const blob=await res.blob();
+    const ext=blob.type.includes('png')?'png':'jpg';
+    const filename=`${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const {data,error}=await db.storage.from('images').upload(filename,blob,{contentType:blob.type,upsert:false});
+    if(error){console.warn('Storage upload failed, using base64:',error.message);return base64DataUrl;}
+    const {data:urlData}=db.storage.from('images').getPublicUrl(filename);
+    return urlData.publicUrl;
+  }catch(e){
+    console.warn('Storage upload error, using base64:',e.message);
+    return base64DataUrl;
+  }
+}
+
+async function deleteFromStorage(url){
+  if(!url||!url.includes('supabase.co/storage'))return;
+  try{
+    const path=url.split('/object/public/images/')[1];
+    if(path)await db.storage.from('images').remove([path]);
+  }catch(e){}
+}
+
+// Process all images in a product before saving — upload to Storage if base64
+async function processProductImages(p){
+  const out={...p};
+  // Gallery images
+  if(out.images&&out.images.length){
+    out.images=await Promise.all(out.images.map(img=>
+      img&&img.startsWith('data:image')?uploadToStorage(img,'products'):Promise.resolve(img)
+    ));
+    out.images=out.images.filter(Boolean);
+  }
+  // Legacy single img
+  if(out.img&&out.img.startsWith('data:image')){
+    out.img=await uploadToStorage(out.img,'products');
+  }
+  // Logo images
+  if(out.logos&&out.logos.length){
+    out.logos=await Promise.all(out.logos.map(img=>
+      img&&img.startsWith('data:image')?uploadToStorage(img,'logos'):Promise.resolve(img)
+    ));
+    out.logos=out.logos.filter(Boolean);
+  }
+  return out;
+}
+
+// Process ricamo images before saving
+async function processRicamoImages(r){
+  const out={...r};
+  if(out.img&&out.img.startsWith('data:image')){
+    out.img=await uploadToStorage(out.img,'ricami');
+  }
+  return out;
 }
 
 </script>
