@@ -206,6 +206,20 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
 .exp-item:hover{background:var(--bg2);}
 .exp-item.sel{border-color:var(--accent);background:var(--accent-l);}
 .spinner{display:none;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+/* Ricamo picker */
+.ricamo-picker{border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;background:var(--bg);transition:border-color .15s;min-height:42px;}
+.ricamo-picker:hover{border-color:var(--accent);}
+.ricamo-picker img{width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.ricamo-picker-name{font-size:13px;font-weight:600;color:var(--txt);}
+.ricamo-picker-sub{font-size:11px;color:var(--txt2);}
+.ricamo-picker-empty{font-size:13px;color:var(--txt3);font-style:italic;}
+/* Ricamo picker modal */
+.ricamo-pick-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:background .1s,border-color .1s;}
+.ricamo-pick-item:hover{background:var(--accent-l);border-color:var(--accent);}
+.ricamo-pick-item.selected{background:var(--accent-l);border-color:var(--accent);}
+.ricamo-pick-item img{width:44px;height:44px;object-fit:contain;border-radius:5px;border:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.ricamo-pick-none{display:flex;align-items:center;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;color:var(--txt2);font-style:italic;transition:background .1s;}
+.ricamo-pick-none:hover{background:var(--bg2);}
 /* Product search results */
 .prod-search-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:background .1s,border-color .1s;overflow:hidden;}
 .prod-search-item:hover{background:var(--accent-l);border-color:var(--accent);}
@@ -578,9 +592,21 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
             <div id="modal-logos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:8px;min-height:20px"></div>
             <div class="dropzone" id="modal-logos-dropzone" style="padding:12px">📷 Carica immagini loghi/stampe (JPG, PNG)<input type="file" multiple accept="image/*" onchange="handleModalLogos(event)"></div>
           </div>
-          <div class="fg full"><label>Fronte ricamo — programma associato</label><select id="p-ef-ricamo"><option value="">Nessuno</option></select></div>
-          <div class="fg full"><label>Retro ricamo — programma associato</label><select id="p-eb-ricamo"><option value="">Nessuno</option></select></div>
-          <div class="fg full"><label>Ricamo gamba / braccio — programma associato</label><select id="p-eo-ricamo"><option value="">Nessuno</option></select></div>
+          <div class="fg full">
+            <label>Fronte ricamo — programma associato</label>
+            <div class="ricamo-picker" id="picker-ef" onclick="openRicamoPicker('ef')"></div>
+            <input type="hidden" id="p-ef-ricamo">
+          </div>
+          <div class="fg full">
+            <label>Retro ricamo — programma associato</label>
+            <div class="ricamo-picker" id="picker-eb" onclick="openRicamoPicker('eb')"></div>
+            <input type="hidden" id="p-eb-ricamo">
+          </div>
+          <div class="fg full">
+            <label>Ricamo gamba / braccio — programma associato</label>
+            <div class="ricamo-picker" id="picker-eo" onclick="openRicamoPicker('eo')"></div>
+            <input type="hidden" id="p-eo-ricamo">
+          </div>
           <div class="fg full"><label>Note prodotto</label><textarea id="p-notes" placeholder="Note interne sul prodotto…"></textarea></div>
         </div>
       </div>
@@ -621,6 +647,19 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
           <button class="btn" onclick="CM('modal-ricamo')">Annulla</button>
           <button class="btn btn-p" onclick="saveRicamo()">Salva programma</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RICAMO PICKER MODAL -->
+  <div class="ov" id="modal-ricamo-picker" style="display:none">
+    <div class="modal modal-sm">
+      <div class="mh"><h2 id="ricamo-picker-title">Seleziona programma ricamo</h2><button class="mc" onclick="CM('modal-ricamo-picker')">×</button></div>
+      <div class="mb">
+        <input type="text" id="ricamo-picker-search" placeholder="Cerca per nome o scuola…"
+          oninput="renderRicamoPickerList()"
+          style="width:100%;padding:9px 12px;border-radius:var(--r);border:1px solid var(--border);font-family:inherit;font-size:13px;background:var(--bg);color:var(--txt);margin-bottom:10px">
+        <div id="ricamo-picker-list" style="max-height:380px;overflow-y:auto"></div>
       </div>
     </div>
   </div>
@@ -1257,18 +1296,26 @@ function openProdDet(id){
     return`<div class="crow"><div class="ck">${c.k}</div><div class="cv"><span class="ctag">${c.v}</span>${ric?` <span style="font-size:11px;color:var(--txt2)">→ ${ric.name}${ric.price?' · €'+ric.price:''}</span>`:''}${ric&&ric.fileData?` <button class="btn btn-sm" style="margin-left:6px" onclick="dlFile('${ric.fileName||'ricamo'}','${ric.fileData}')">📎 File</button>`:''}</div></div>`;
   }).join('')||'<div style="font-size:13px;color:var(--txt2)">Nessuna personalizzazione.</div>';
   // pannello ricamo principale (primo trovato)
-  const mainRicId=p.embFrontRicamo||p.embBackRicamo||p.embOtherRicamo;
-  if(mainRicId&&rmap[mainRicId]){
-    const ric=rmap[mainRicId];
+  const ricamiLinked=[];
+  for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba/braccio']]){
+    const rid=p[key];
+    if(rid&&rmap[rid])ricamiLinked.push({label,ric:rmap[rid]});
+  }
+  if(ricamiLinked.length){
     $('pd-ricamo-panel').style.display='block';
-    $('pd-ricamo-content').innerHTML=`<div style="display:flex;gap:12px;align-items:start">
-      ${ric.img?`<img src="${ric.img}" style="width:80px;height:80px;object-fit:contain;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2)">`:`<div style="width:80px;height:80px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3)">🧵</div>`}
-      <div><div style="font-size:14px;font-weight:700">${ric.name}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-top:2px">${ric.school||'—'}</div>
-      ${ric.price?`<div style="font-size:13px;font-weight:700;color:var(--ok-t);margin-top:4px">€ ${ric.price}</div>`:''}
-      ${ric.colors?`<div style="margin-top:6px;font-size:12px;color:var(--txt2)">${ric.colors.split('\n').map(c=>`<div>${c}</div>`).join('')}</div>`:''}
-      ${ric.fileData?`<button class="btn btn-sm" style="margin-top:6px" onclick="dlFile('${ric.fileName||'ricamo'}','${ric.fileData}')">📎 Scarica file ricamo</button>`:''}
-      </div></div>`;
+    $('pd-ricamo-content').innerHTML=ricamiLinked.map(({label,ric})=>`
+      <div style="display:flex;gap:12px;align-items:start;padding:10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px;background:var(--bg2)">
+        <div style="flex-shrink:0">
+          ${ric.img?`<img src="${ric.img}" style="width:70px;height:70px;object-fit:contain;border-radius:var(--r);border:1px solid var(--border);background:var(--bg)">`:`<div style="width:70px;height:70px;background:var(--bg);border-radius:var(--r);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3)">🧵</div>`}
+          <div style="font-size:10px;color:var(--txt3);text-align:center;margin-top:3px">${label}</div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700">${ric.name}</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:1px">${ric.school||'—'}</div>
+          ${ric.colors?`<div style="margin-top:4px;font-size:11px;color:var(--txt2)">${ric.colors.split('\n').map(c=>`<div>${c}</div>`).join('')}</div>`:''}
+          ${ric.fileData?`<button class="btn btn-sm" style="margin-top:6px" onclick="dlFile('${ric.fileName||'ricamo'}','${ric.fileData}')">📎 Scarica file</button>`:''}
+        </div>
+      </div>`).join('');
   } else $('pd-ricamo-panel').style.display='none';
   renderFilesList(p);
   renderLogosGrid(p,'pd-logos-grid');
@@ -1324,6 +1371,7 @@ function openNewProduct(){
   $('prod-del-btn').style.display='none';
   ['p-desc','p-art','p-col','p-code','p-uu','p-sch','p-custom','p-notes'].forEach(id=>{if($(id))$(id).value='';}); pendingModalLogos=[];renderModalLogosGrid([]);
   ['p-ef-ricamo','p-eb-ricamo','p-eo-ricamo'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  ['ef','eb','eo'].forEach(f=>updatePickerDisplay(f,''));
   $('p-sup').value='';
   fillStampatoreSelect('p-dest');
   renderSizeGrid('p-sizes-grid',[]);
@@ -1404,8 +1452,8 @@ function renderRicami(){
   </div>`).join('');
 }
 function fillRicamoSelect(){
-  const opts='<option value="">Nessuno</option>'+ricami.map(r=>`<option value="${r.id}">${r.name}${r.school?' — '+r.school:''}</option>`).join('');
-  ['p-ef-ricamo','p-eb-ricamo','p-eo-ricamo'].forEach(id=>{const sel=$(id);if(sel)sel.innerHTML=opts;});
+  // Pickers are now visual — just init displays
+  initAllPickers();
 }
 function openNewRicamo(){
   editingRicamoId=null;pendingRicamoImg=null;pendingRicamoFile=null;
@@ -1687,6 +1735,7 @@ function openEditProduct(id){
   $('p-ef-ricamo').value=p.embFrontRicamo||'';
   $('p-eb-ricamo').value=p.embBackRicamo||'';
   $('p-eo-ricamo').value=p.embOtherRicamo||'';
+  ['ef','eb','eo'].forEach(f=>{const inp=$('p-'+f+'-ricamo');updatePickerDisplay(f,inp?.value||'');});
   renderSizeGrid('p-sizes-grid',p.sizes||[]);
   pendingModalLogos=[...(p.logos||[])];renderModalLogosGrid(pendingModalLogos);
   $('modal-product').style.display='flex';
@@ -2189,6 +2238,7 @@ function duplicateProduct(id){
   $('p-ef-ricamo').value=p.embFrontRicamo||'';
   $('p-eb-ricamo').value=p.embBackRicamo||'';
   $('p-eo-ricamo').value=p.embOtherRicamo||'';
+  ['ef','eb','eo'].forEach(f=>{const inp=$('p-'+f+'-ricamo');updatePickerDisplay(f,inp?.value||'');});
   // Copy sizes
   renderSizeGrid('p-sizes-grid',p.sizes||[]);
   // Copy logos
@@ -2373,6 +2423,81 @@ async function importFromExcel(e){
     console.error(err);
     toast('Errore lettura file: '+err.message.slice(0,80));
   }
+}
+
+
+// ── RICAMO PICKER ─────────────────────────────────────────────────────────────
+let currentPickerField = null; // 'ef', 'eb', 'eo'
+
+function openRicamoPicker(field){
+  currentPickerField = field;
+  const labels = {ef:'Fronte ricamo', eb:'Retro ricamo', eo:'Gamba / braccio'};
+  $('ricamo-picker-title').textContent = 'Seleziona — ' + labels[field];
+  $('ricamo-picker-search').value = '';
+  renderRicamoPickerList();
+  $('modal-ricamo-picker').style.display = 'flex';
+  setTimeout(()=>$('ricamo-picker-search').focus(), 100);
+}
+
+function renderRicamoPickerList(){
+  const q = ($('ricamo-picker-search').value||'').toLowerCase();
+  const list = $('ricamo-picker-list');
+  const curId = $('p-'+currentPickerField+'-ricamo')?.value||'';
+
+  const filtered = ricami.filter(r =>
+    !q || (r.name||'').toLowerCase().includes(q) || (r.school||'').toLowerCase().includes(q)
+  );
+
+  let html = `<div class="ricamo-pick-none ${!curId?'selected':''}" onclick="selectRicamo('')">
+    <span style="font-size:18px;margin-right:8px">✕</span> Nessuno
+  </div>`;
+
+  html += filtered.map(r => `
+    <div class="ricamo-pick-item ${r.id===curId?'selected':''}" onclick="selectRicamo('${r.id}')">
+      ${r.img ? `<img src="${r.img}" alt="">` : `<div style="width:44px;height:44px;background:var(--bg2);border-radius:5px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🧵</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${r.name||'—'}</div>
+        <div style="font-size:11px;color:var(--txt2)">${r.school||''}</div>
+        ${r.colors ? `<div style="font-size:11px;color:var(--txt3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.colors||'').split('\n').join(' · ')}</div>` : ''}
+      </div>
+      ${r.id===curId ? '<span style="color:var(--accent);font-size:18px">✓</span>' : ''}
+    </div>`).join('');
+
+  if(!filtered.length) html += '<div class="empty-msg">Nessun ricamo trovato</div>';
+  list.innerHTML = html;
+}
+
+function selectRicamo(id){
+  if(!currentPickerField) return;
+  const inp = $('p-'+currentPickerField+'-ricamo');
+  if(inp) inp.value = id;
+  updatePickerDisplay(currentPickerField, id);
+  CM('modal-ricamo-picker');
+}
+
+function updatePickerDisplay(field, id){
+  const div = $('picker-'+field);
+  if(!div) return;
+  if(!id){
+    div.innerHTML = '<span class="ricamo-pick-empty">Clicca per selezionare programma ricamo…</span>';
+    return;
+  }
+  const r = ricami.find(x=>x.id===id);
+  if(!r){ div.innerHTML = '<span class="ricamo-pick-empty">Clicca per selezionare…</span>'; return; }
+  div.innerHTML = `
+    ${r.img ? `<img src="${r.img}" alt="">` : '<span style="font-size:20px">🧵</span>'}
+    <div>
+      <div class="ricamo-picker-name">${r.name}</div>
+      <div class="ricamo-picker-sub">${r.school||''}${r.colors?' · '+(r.colors||'').split('\n')[0]:''}</div>
+    </div>
+    <span style="margin-left:auto;font-size:11px;color:var(--txt3)">cambia</span>`;
+}
+
+function initAllPickers(){
+  ['ef','eb','eo'].forEach(f => {
+    const inp = $('p-'+f+'-ricamo');
+    updatePickerDisplay(f, inp?.value||'');
+  });
 }
 
 </script>
