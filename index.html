@@ -2328,9 +2328,11 @@ async function importFromExcel(e){
       ref = ref.toString().trim();
       size = (size||'').toString().trim();
 
+      // Empty size = Unica, no need to strip anything
+      if(!size) return ref.toUpperCase();
+
       // Try removing size from end (with or without separator)
       const sizeUpper = size.toUpperCase().replace(/\s+.*/,''); // handle "XS (7-8 anni)" → "XS"
-      const refUpper = ref.toUpperCase();
 
       // Remove trailing -SIZE or SIZE
       const patterns = [
@@ -2380,10 +2382,12 @@ async function importFromExcel(e){
       if(!ref||!qty||qty<=0) continue;
 
       // Normalize size: extract just the size code
-      const sizeNorm = rawSize.toUpperCase()
+      const sizeNormRaw = rawSize.toUpperCase()
         .replace(/\s*\(.*\)/g,'')  // remove "(7-8 anni)" etc
         .replace(/\s+/g,'')
         .trim();
+      // Empty or "UNICA"/"ONE SIZE" → treat as Unica
+      const sizeNorm = (!sizeNormRaw || sizeNormRaw==='UNICA' || sizeNormRaw==='ONESIZE' || sizeNormRaw==='ONESIZE' || sizeNormRaw==='TU') ? 'Unica' : sizeNormRaw;
 
       const baseCode = extractBaseCode(ref, sizeNorm);
       const prod = findProduct(baseCode);
