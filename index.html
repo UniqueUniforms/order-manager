@@ -1887,7 +1887,13 @@ async function exportRicamatore(){
   try{
     const map=pm();
     const rmapObj=Object.fromEntries(ricami.map(r=>[r.id,r]));
-    const ALL_SZ=['2YXS','YXS','XXS','XS','S','M','L','XL','XXL','3XL','4XL','Unica'];
+    // Build dynamic size list from actual order data instead of fixed list
+    const ALL_SZ_FIXED=['3YXS','2YXS','YXS','XXS','XS','S','M','L','XL','XXL','3XL','4XL','5XL','1/2','2/4','3/4','4/6','5/6','6/8','7/8','8/10','9/11','10/12','12/13','12/14','2','4','6','8','10','12','14','Unica'];
+    // Get all sizes actually used in this order
+    const allUsedSizes=new Set();
+    for(const pr of (o.products||[]))Object.keys(pr.sizes||{}).forEach(s=>{if(+pr.sizes[s]>0)allUsedSizes.add(s);});
+    // Sort: fixed order first, then any extras
+    const ALL_SZ=[...ALL_SZ_FIXED.filter(s=>allUsedSizes.has(s)),...[...allUsedSizes].filter(s=>!ALL_SZ_FIXED.includes(s)).sort()];
     const orderProds=(o.products||[]).filter(pr=>!pr.manual&&map[pr.pid]&&Object.values(pr.sizes||{}).some(v=>+v>0));
     const usedSizes=ALL_SZ.filter(s=>orderProds.some(pr=>+((pr.sizes||{})[s]||0)>0));
 
