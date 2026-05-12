@@ -2370,25 +2370,40 @@ async function importFromExcel(e){
     // Function to match base code to a product in catalog (fuzzy)
     function findProduct(baseCode){
       if(!baseCode) return null;
-      const bc = baseCode.toUpperCase().replace(/[-\s]/g,'');
+      const bc = baseCode.toUpperCase();
+      const bcStripped = bc.replace(/[-\s]/g,''); // remove all dashes and spaces
 
-      // Exact match on UU code
-      let found = products.find(p=>(p.uu||'').toUpperCase()===baseCode);
+      // 1. Exact match on UU code (case insensitive)
+      let found = products.find(p=>(p.uu||'').toUpperCase()===bc);
       if(found) return found;
 
-      // Normalize and compare
+      // 2. Exact match after stripping dashes
       found = products.find(p=>{
         const uu = (p.uu||'').toUpperCase().replace(/[-\s]/g,'');
-        return uu === bc;
+        return uu && uu === bcStripped;
       });
       if(found) return found;
 
-      // Partial: base code starts with product UU (or vice versa)
+      // 3. One starts with the other (handles truncation)
       found = products.find(p=>{
         const uu = (p.uu||'').toUpperCase().replace(/[-\s]/g,'');
-        return uu && (bc.startsWith(uu) || uu.startsWith(bc));
+        return uu && (bcStripped.startsWith(uu) || uu.startsWith(bcStripped));
       });
-      return found||null;
+      if(found) return found;
+
+      // 4. Fuzzy: catalog UU stripped starts with first N chars of base code
+      // Handles IMZ-FLEECB matching IMZ-FLEECE-B (missing one char)
+      found = products.find(p=>{
+        const uu = (p.uu||'').toUpperCase().replace(/[-\s]/g,'');
+        if(!uu || uu.length < 4) return false;
+        // Check if they share same prefix up to min length - 1 (allows 1 char difference)
+        const minLen = Math.min(uu.length, bcStripped.length);
+        const prefix = Math.max(4, minLen - 2); // match at least 4 chars, allow 2 char diff
+        return uu.slice(0,prefix) === bcStripped.slice(0,prefix);
+      });
+      if(found) return found;
+
+      return null;
     }
 
     // Parse data rows
