@@ -2322,6 +2322,16 @@ async function importFromExcel(e){
       '12/13','9/11','7/8','5/6','3/4','1/2',
     ];
 
+    // Normalize size: convert dashes to slashes for numeric sizes (7-8 → 7/8)
+    function normalizeSize(s){
+      if(!s) return 'Unica';
+      s = s.toString().trim().toUpperCase().replace(/\s*\(.*\)/g,'').replace(/\s+/g,'');
+      if(!s||s==='UNICA'||s==='ONESIZE'||s==='TU') return 'Unica';
+      // Convert numeric ranges with dash to slash: 7-8 → 7/8, 12-13 → 12/13
+      s = s.replace(/^(\d+)-(\d+)$/, '$1/$2');
+      return s;
+    }
+
     // Function to extract base code by removing size suffix from reference
     function extractBaseCode(ref, size){
       if(!ref) return '';
@@ -2331,17 +2341,22 @@ async function importFromExcel(e){
       // Empty size = Unica, no need to strip anything
       if(!size) return ref.toUpperCase();
 
-      // Try removing size from end (with or without separator)
-      const sizeUpper = size.toUpperCase().replace(/\s+.*/,''); // handle "XS (7-8 anni)" → "XS"
+      const sizeUpper = normalizeSize(size).replace(/[/()]/g,'\\$&');
+      // Also try the dash version of the size
+      const sizeDash = normalizeSize(size).replace(/\//g,'-').replace(/[()]/g,'\\$&');
 
-      // Remove trailing -SIZE or SIZE
+      // Remove trailing separator+SIZE — try both / and - as separator
       const patterns = [
-        new RegExp('-'+sizeUpper.replace(/[/()]/g,'\\$&')+'$','i'),
-        new RegExp(sizeUpper.replace(/[/()]/g,'\\$&')+'$','i'),
+        new RegExp('[/-]'+sizeUpper+'$','i'),
+        new RegExp('[/-]'+sizeDash+'$','i'),
+        new RegExp(sizeUpper+'$','i'),
+        new RegExp(sizeDash+'$','i'),
       ];
       for(const pat of patterns){
-        const cleaned = ref.replace(pat,'').replace(/-+$/,'');
-        if(cleaned && cleaned !== ref) return cleaned.toUpperCase();
+        try{
+          const cleaned = ref.replace(pat,'').replace(/[-/]+$/,'');
+          if(cleaned && cleaned !== ref) return cleaned.toUpperCase();
+        }catch(e){}
       }
       return ref.toUpperCase();
     }
@@ -2382,12 +2397,7 @@ async function importFromExcel(e){
       if(!ref||!qty||qty<=0) continue;
 
       // Normalize size: extract just the size code
-      const sizeNormRaw = rawSize.toUpperCase()
-        .replace(/\s*\(.*\)/g,'')  // remove "(7-8 anni)" etc
-        .replace(/\s+/g,'')
-        .trim();
-      // Empty or "UNICA"/"ONE SIZE" → treat as Unica
-      const sizeNorm = (!sizeNormRaw || sizeNormRaw==='UNICA' || sizeNormRaw==='ONESIZE' || sizeNormRaw==='ONESIZE' || sizeNormRaw==='TU') ? 'Unica' : sizeNormRaw;
+      const sizeNorm = normalizeSize(rawSize);
 
       const baseCode = extractBaseCode(ref, sizeNorm);
       const prod = findProduct(baseCode);
@@ -2396,7 +2406,7 @@ async function importFromExcel(e){
         matched++;
         if(!grouped[prod.id]) grouped[prod.id]={product:prod,sizes:{}};
         // Map size to our standard sizes
-        const sizeKey = mapSize(sizeNorm);
+        const sizeKey = sizeNorm; // already normalized by normalizeSize()
         grouped[prod.id].sizes[sizeKey]=(grouped[prod.id].sizes[sizeKey]||0)+qty;
       } else {
         if(!unmatched.includes(baseCode)) unmatched.push(baseCode);
