@@ -354,8 +354,9 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
         <div class="dh">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="flex:1"><div id="od-title" style="font-size:18px;font-weight:700"></div><div id="od-sup" style="font-size:13px;color:var(--txt2);margin-top:3px"></div></div>
-            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap">
               <div id="od-status"></div>
+              <select id="od-status-select" class="fsel" style="font-size:12px;padding:4px 8px" onchange="changeOrdStatusInline(this.value)"></select>
               <button class="btn btn-sm" onclick="openEditOrd()">✏️ Modifica</button>
             </div>
           </div>
@@ -378,6 +379,16 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
           <div class="note-add">
             <textarea id="note-input" placeholder="Aggiungi una nota o aggiornamento…"></textarea>
             <button class="btn btn-p" onclick="addNote()" style="align-self:flex-end">Aggiungi</button>
+          </div>
+        </div>
+        <div class="note-panel">
+          <h3>📎 Documenti allegati (DDT, fatture, ecc.)</h3>
+          <div id="od-attachments"></div>
+          <div style="margin-top:8px">
+            <label class="dropzone" style="padding:12px;display:block;cursor:pointer">
+              + Trascina o clicca per allegare documenti (PDF, JPG, PNG, Excel…)
+              <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx" style="display:none" onchange="addOrderAttachment(event)">
+            </label>
           </div>
         </div>
         <div id="od-prods"></div>
@@ -1033,6 +1044,11 @@ function openOrdDet(id){
   $('od-title').textContent=(o.school||'—')+(o.desc?' — '+o.desc:'');
   $('od-sup').textContent=o.supplier;
   $('od-status').innerHTML=sbadge(o.status);
+  // Populate inline status select
+  const odSel=$('od-status-select');
+  if(odSel){
+    odSel.innerHTML=statuses.map(s=>`<option value="${s.name}" ${s.name===o.status?'selected':''}>${s.name}</option>`).join('');
+  }
   $('od-date').textContent=fmtDate(o.date);
   $('od-num').textContent=o.num||'—';
   $('od-pom').textContent=o.pom||'—';
@@ -1044,12 +1060,23 @@ function openOrdDet(id){
     $('od-deadline').style.color=days<=3?'var(--danger-t)':days<=7?'var(--orange-t)':'var(--txt)';
   } else $('od-deadline').textContent='—';
   $('od-alert-days').textContent=o.alertDays?o.alertDays+' giorni prima':'—';
-  renderThread(o);renderOrdProds(o);
+  renderThread(o);renderOrderAttachments(o);renderOrdProds(o);
   showView('order-detail',null,true);
 }
 function renderThread(o){
   const thread=o.thread||[];
-  $('od-thread').innerHTML=thread.length?thread.map(n=>`<div class="note-entry"><div class="ne-hdr"><span style="font-size:12px;font-weight:700">📝 Nota</span><span class="ne-date">${n.date||''}</span></div><div class="ne-text">${n.text}</div></div>`).join(''):'<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nessuna nota ancora.</div>';
+  $('od-thread').innerHTML=thread.length?thread.map((n,i)=>`
+    <div class="note-entry" id="note-entry-${i}">
+      <div class="ne-hdr">
+        <span style="font-size:12px;font-weight:700">📝 Nota</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="ne-date">${n.date||''}</span>
+          <button class="btn btn-sm" style="padding:2px 7px;font-size:11px" onclick="editNote(${i})">✏️</button>
+          <button class="btn btn-sm btn-r" style="padding:2px 7px;font-size:11px" onclick="deleteNote(${i})">×</button>
+        </div>
+      </div>
+      <div class="ne-text" id="note-text-${i}">${n.text}</div>
+    </div>`).join(''):'<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nessuna nota ancora.</div>';
 }
 async function addNote(){
   const text=$('note-input').value.trim();if(!text)return;
@@ -2558,6 +2585,94 @@ function initAllPickers(){
     const inp = $('p-'+f+'-ricamo');
     updatePickerDisplay(f, inp?.value||'');
   });
+}
+
+
+// ── INLINE STATUS CHANGE ──────────────────────────────────────────────────────
+async function changeOrdStatusInline(newStatus){
+  const o=orders.find(x=>x.id===currentOrdId);if(!o)return;
+  o.status=newStatus;
+  $('od-status').innerHTML=sbadge(newStatus);
+  try{await upsert('orders',o.id,o);toast('✅ Status aggiornato');renderDashboard();}
+  catch(e){toast('Errore aggiornamento status');}
+}
+
+// ── EDITABLE NOTES ────────────────────────────────────────────────────────────
+async function editNote(idx){
+  const o=orders.find(x=>x.id===currentOrdId);if(!o||!o.thread)return;
+  const note=o.thread[idx];if(!note)return;
+  const textEl=document.getElementById('note-text-'+idx);if(!textEl)return;
+  // Replace text with textarea
+  const oldText=note.text;
+  textEl.innerHTML=`<textarea style="width:100%;min-height:60px;padding:6px;border:1px solid var(--accent);border-radius:var(--r);font-family:inherit;font-size:13px;background:var(--bg);color:var(--txt)">${oldText}</textarea>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button class="btn btn-p btn-sm" onclick="saveNoteEdit(${idx})">Salva</button>
+      <button class="btn btn-sm" onclick="renderThread(orders.find(x=>x.id===currentOrdId))">Annulla</button>
+    </div>`;
+}
+
+async function saveNoteEdit(idx){
+  const o=orders.find(x=>x.id===currentOrdId);if(!o||!o.thread)return;
+  const textEl=document.getElementById('note-text-'+idx);if(!textEl)return;
+  const ta=textEl.querySelector('textarea');if(!ta)return;
+  const newText=ta.value.trim();if(!newText)return;
+  o.thread[idx].text=newText;
+  try{await upsert('orders',o.id,o);renderThread(o);toast('Nota aggiornata');}
+  catch(e){toast('Errore salvataggio');}
+}
+
+async function deleteNote(idx){
+  if(!confirm('Eliminare questa nota?'))return;
+  const o=orders.find(x=>x.id===currentOrdId);if(!o||!o.thread)return;
+  o.thread.splice(idx,1);
+  try{await upsert('orders',o.id,o);renderThread(o);toast('Nota eliminata');}
+  catch(e){toast('Errore eliminazione');}
+}
+
+// ── ORDER ATTACHMENTS ─────────────────────────────────────────────────────────
+function renderOrderAttachments(o){
+  const c=$('od-attachments');if(!c)return;
+  const atts=o.attachments||[];
+  if(!atts.length){c.innerHTML='<div style="font-size:13px;color:var(--txt3);margin-bottom:6px">Nessun documento allegato.</div>';return;}
+  const em={'pdf':'fi-pdf','jpg':'fi-jpg','jpeg':'fi-jpeg','png':'fi-png','xlsx':'fi-dst','xls':'fi-dst','doc':'fi-other','docx':'fi-other'};
+  c.innerHTML=atts.map((f,i)=>{
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    return`<div class="fitem">
+      <div class="fic ${em[ext]||'fi-other'}">${ext.toUpperCase()}</div>
+      <div style="flex:1;min-width:0"><div class="fname">${f.name}</div><div class="fsz">${f.size||''} · ${f.date||''}</div></div>
+      <div style="display:flex;gap:4px">
+        ${f.dataUrl?`<button class="btn btn-sm" onclick="dlFile('${f.name}','${f.dataUrl}')">Scarica</button>`:''}
+        <button class="btn btn-sm btn-r" onclick="removeOrderAttachment(${i})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addOrderAttachment(e){
+  const o=orders.find(x=>x.id===currentOrdId);if(!o)return;
+  if(!o.attachments)o.attachments=[];
+  const files=Array.from(e.target.files);
+  toast('Caricamento documenti…');
+  let done=0;
+  for(const f of files){
+    const dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.readAsDataURL(f);});
+    const kb=Math.round(f.size/1024);
+    const now=new Date();
+    const dateStr=`${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getFullYear()}`;
+    o.attachments.push({name:f.name,size:kb>1024?`${(kb/1024).toFixed(1)} MB`:`${kb} KB`,date:dateStr,dataUrl});
+    done++;
+  }
+  try{await upsert('orders',o.id,o);renderOrderAttachments(o);toast('✅ Documento allegato');}
+  catch(e2){toast('Errore: '+e2.message);}
+  e.target.value='';
+}
+
+async function removeOrderAttachment(idx){
+  if(!confirm('Eliminare questo documento?'))return;
+  const o=orders.find(x=>x.id===currentOrdId);if(!o||!o.attachments)return;
+  o.attachments.splice(idx,1);
+  try{await upsert('orders',o.id,o);renderOrderAttachments(o);toast('Documento eliminato');}
+  catch(e){toast('Errore eliminazione');}
 }
 
 </script>
