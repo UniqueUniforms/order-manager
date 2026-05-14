@@ -473,7 +473,13 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
       <!-- PROGRAMMI RICAMO -->
       <div class="view" id="view-ricami">
         <div class="card">
-          <div class="ch"><span class="ct">Programmi Ricamo</span><button class="btn btn-p" onclick="openNewRicamo()">+ Nuovo programma</button></div>
+          <div class="ch">
+            <span class="ct">Programmi Ricamo</span>
+            <div class="fbar">
+              <input type="text" placeholder="Cerca per codice o scuola…" id="ricami-q" oninput="renderRicami()" style="width:220px">
+            </div>
+            <button class="btn btn-p" onclick="openNewRicamo()">+ Nuovo programma</button>
+          </div>
           <div style="padding:16px" id="ricami-list"><div class="empty-msg">Nessun programma ricamo ancora.</div></div>
         </div>
       </div>
@@ -1481,8 +1487,14 @@ async function delProdById(id){if(!confirm('⚠️ Eliminare definitivamente que
 // ── RICAMI ────────────────────────────────────────────────────────────────────
 function renderRicami(){
   const c=$('ricami-list');
+  const q=(($('ricami-q')||{}).value||'').toLowerCase().trim();
+  const list=ricami.filter(r=>!q||
+    (r.name||'').toLowerCase().includes(q)||
+    (r.school||'').toLowerCase().includes(q)
+  );
   if(!ricami.length){c.innerHTML='<div class="empty-msg">Nessun programma ricamo ancora. Clicca "+ Nuovo programma" per iniziare.</div>';return;}
-  c.innerHTML=ricami.map(r=>`<div class="ricamo-card">
+  if(!list.length){c.innerHTML='<div class="empty-msg">Nessun risultato per "'+q+'".</div>';return;}
+  c.innerHTML=list.map(r=>`<div class="ricamo-card">
     <div class="ricamo-card-body">
       ${r.img?`<img class="ricamo-img" src="${r.img}" alt="">`:`<div class="ricamo-img-placeholder">🧵</div>`}
       <div class="ricamo-meta">
