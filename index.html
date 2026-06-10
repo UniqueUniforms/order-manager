@@ -306,7 +306,7 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
         <div class="sgrid">
           <div class="sc"><div class="sc-l">Ordini totali</div><div class="sc-v" id="s-tot">—</div><div class="sc-s">registrati</div></div>
           <div class="sc"><div class="sc-l">In corso</div><div class="sc-v" id="s-act">—</div><div class="sc-s">da completare</div></div>
-          <div class="sc"><div class="sc-l">Fatturati</div><div class="sc-v" id="s-inv">—</div><div class="sc-s">chiusi</div></div>
+          <div class="sc"><div class="sc-l">Completati</div><div class="sc-v" id="s-inv">—</div><div class="sc-s">ricevuti o fatturati</div></div>
           <div class="sc"><div class="sc-l">Catalogo prodotti</div><div class="sc-v" id="s-pr">—</div><div class="sc-s">articoli</div></div>
         </div>
         <div class="card">
@@ -615,9 +615,14 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
             <input type="hidden" id="p-ef-ricamo">
           </div>
           <div class="fg full">
-            <label>Retro ricamo — programma associato</label>
+            <label>Retro ricamo 1 — programma associato</label>
             <div class="ricamo-picker" id="picker-eb" onclick="openRicamoPicker('eb')"></div>
             <input type="hidden" id="p-eb-ricamo">
+          </div>
+          <div class="fg full">
+            <label>Retro ricamo 2 — programma associato</label>
+            <div class="ricamo-picker" id="picker-eb2" onclick="openRicamoPicker('eb2')"></div>
+            <input type="hidden" id="p-eb2-ricamo">
           </div>
           <div class="fg full">
             <label>Ricamo manica / gamba destra — programma associato</label>
@@ -971,7 +976,7 @@ function handleMain(){
 function renderDashboard(){
   $('s-tot').textContent=orders.length;
   $('s-act').textContent=orders.filter(o=>!['FATTURATO','RICEVUTO'].includes(o.status)).length;
-  $('s-inv').textContent=orders.filter(o=>o.status==='FATTURATO').length;
+  $('s-inv').textContent=orders.filter(o=>['FATTURATO','RICEVUTO'].includes(o.status)).length;
   $('s-pr').textContent=products.length;
   // Deadline alerts
   const alerts=orders.filter(o=>{
@@ -1335,7 +1340,7 @@ function openProdDet(id){
   }).join('')||'<div style="font-size:13px;color:var(--txt2)">Nessuna personalizzazione.</div>';
   // pannello ricamo principale (primo trovato)
   const ricamiLinked=[];
-  for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro'],['embOtherRicamo','Gamba/braccio destra'],['embOther2Ricamo','Gamba/braccio sinistra']]){
+  for(const [key,label] of [['embFrontRicamo','Fronte'],['embBackRicamo','Retro 1'],['embBack2Ricamo','Retro 2'],['embOtherRicamo','Gamba/braccio destra'],['embOther2Ricamo','Gamba/braccio sinistra']]){
     const rid=p[key];
     if(rid&&rmap[rid])ricamiLinked.push({label,ric:rmap[rid]});
   }
@@ -1409,8 +1414,8 @@ function openNewProduct(){
   $('prod-modal-title').textContent='Nuovo prodotto in catalogo';
   $('prod-del-btn').style.display='none';
   ['p-desc','p-art','p-col','p-code','p-uu','p-sch','p-custom','p-notes'].forEach(id=>{if($(id))$(id).value='';}); pendingModalLogos=[];renderModalLogosGrid([]);
-  ['p-ef-ricamo','p-eb-ricamo','p-eo-ricamo','p-eo2-ricamo'].forEach(id=>{const el=$(id);if(el)el.value='';});
-  ['ef','eb','eo','eo2'].forEach(f=>updatePickerDisplay(f,''));
+  ['p-ef-ricamo','p-eb-ricamo','p-eb2-ricamo','p-eo-ricamo','p-eo2-ricamo'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  ['ef','eb','eb2','eo','eo2'].forEach(f=>updatePickerDisplay(f,''));
   $('p-sup').value='';
   fillStampatoreSelect('p-dest');
   renderSizeGrid('p-sizes-grid',[]);
@@ -1463,7 +1468,7 @@ async function saveProduct(){
   }
   if(editingProductId){
     const p=products.find(x=>x.id===editingProductId);if(!p)return;
-    Object.assign(p,{desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,embOther2Ricamo:gv('p-eo2-ricamo')||null,sizes,logos:[...pendingModalLogos]});
+    Object.assign(p,{desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embBack2Ricamo:gv('p-eb2-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,embOther2Ricamo:gv('p-eo2-ricamo')||null,sizes,logos:[...pendingModalLogos]});
     try{
       toast('Caricamento immagini…');
       const pProcessed=await processProductImages(p);
@@ -1471,7 +1476,7 @@ async function saveProduct(){
       await upsert('products',p.id,p);CM('modal-product');renderProdsTable();if(currentView==='product-detail')openProdDet(p.id);toast('✅ Prodotto aggiornato');
     }catch(e){toast('Errore salvataggio: '+e.message);}
   } else {
-    const p={id:'p'+Date.now(),desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,embOther2Ricamo:gv('p-eo2-ricamo')||null,sizes,logos:[...pendingModalLogos],images:window._dupImages||[],files:[]};window._dupImages=null;
+    const p={id:'p'+Date.now(),desc:gv('p-desc'),supplier:gv('p-sup'),article:gv('p-art'),color:gv('p-col'),code:gv('p-code'),uu:gv('p-uu'),school:gv('p-sch'),custom:gv('p-custom'),notes:gv('p-notes'),dest:gv('p-dest'),embFrontRicamo:gv('p-ef-ricamo')||null,embBackRicamo:gv('p-eb-ricamo')||null,embBack2Ricamo:gv('p-eb2-ricamo')||null,embOtherRicamo:gv('p-eo-ricamo')||null,embOther2Ricamo:gv('p-eo2-ricamo')||null,sizes,logos:[...pendingModalLogos],images:window._dupImages||[],files:[]};window._dupImages=null;
     if(!p.desc){alert('Inserisci una descrizione');return;}
     try{
       toast('Caricamento immagini…');
@@ -1795,9 +1800,10 @@ function openEditProduct(id){
   fillStampatoreSelect('p-dest',p.dest||'');
   $('p-ef-ricamo').value=p.embFrontRicamo||'';
   $('p-eb-ricamo').value=p.embBackRicamo||'';
+  $('p-eb2-ricamo').value=p.embBack2Ricamo||'';
   $('p-eo-ricamo').value=p.embOtherRicamo||'';
   $('p-eo2-ricamo').value=p.embOther2Ricamo||'';
-  ['ef','eb','eo','eo2'].forEach(f=>{const inp=$('p-'+f+'-ricamo');updatePickerDisplay(f,inp?.value||'');});
+  ['ef','eb','eb2','eo','eo2'].forEach(f=>{const inp=$('p-'+f+'-ricamo');updatePickerDisplay(f,inp?.value||'');});
   renderSizeGrid('p-sizes-grid',p.sizes||[]);
   pendingModalLogos=[...(p.logos||[])];renderModalLogosGrid(pendingModalLogos);
   $('modal-product').style.display='flex';
@@ -2040,7 +2046,8 @@ async function exportRicamatore(){
       };
       for(const [key,label] of [
         ['embFrontRicamo','Fronte'],['embFront','Fronte'],
-        ['embBackRicamo','Retro'],['embBack','Retro'],
+        ['embBackRicamo','Retro 1'],['embBack','Retro'],
+        ['embBack2Ricamo','Retro 2'],
         ['embOtherRicamo','Gamba/braccio destra'],['embOther','Gamba/braccio'],
         ['embOther2Ricamo','Gamba/braccio sinistra'],
         ['ricamoId','Ricamo']
@@ -2306,9 +2313,10 @@ function duplicateProduct(id){
   fillRicamoSelect();
   $('p-ef-ricamo').value=p.embFrontRicamo||'';
   $('p-eb-ricamo').value=p.embBackRicamo||'';
+  $('p-eb2-ricamo').value=p.embBack2Ricamo||'';
   $('p-eo-ricamo').value=p.embOtherRicamo||'';
   $('p-eo2-ricamo').value=p.embOther2Ricamo||'';
-  ['ef','eb','eo','eo2'].forEach(f=>{const inp=$('p-'+f+'-ricamo');updatePickerDisplay(f,inp?.value||'');});
+  ['ef','eb','eb2','eo','eo2'].forEach(f=>{const inp=$('p-'+f+'-ricamo');updatePickerDisplay(f,inp?.value||'');});
   // Copy sizes
   renderSizeGrid('p-sizes-grid',p.sizes||[]);
   // Copy logos
@@ -2530,7 +2538,7 @@ let currentPickerField = null; // 'ef', 'eb', 'eo'
 
 function openRicamoPicker(field){
   currentPickerField = field;
-  const labels = {ef:'Fronte ricamo', eb:'Retro ricamo', eo:'Manica/Gamba destra', eo2:'Manica/Gamba sinistra'};
+  const labels = {ef:'Fronte ricamo', eb:'Retro ricamo 1', eb2:'Retro ricamo 2', eo:'Manica/Gamba destra', eo2:'Manica/Gamba sinistra'};
   $('ricamo-picker-title').textContent = 'Seleziona — ' + labels[field];
   $('ricamo-picker-search').value = '';
   renderRicamoPickerList();
@@ -2593,7 +2601,7 @@ function updatePickerDisplay(field, id){
 }
 
 function initAllPickers(){
-  ['ef','eb','eo','eo2'].forEach(f => {
+  ['ef','eb','eb2','eo','eo2'].forEach(f => {
     const inp = $('p-'+f+'-ricamo');
     updatePickerDisplay(f, inp?.value||'');
   });
