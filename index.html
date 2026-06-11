@@ -276,6 +276,9 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
     <div class="nav-item" id="nav-stampatori" onclick="showView('stampatori',this)">
       <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="8" r="1" fill="currentColor"/></svg>Stampatori/Ricamatori
     </div>
+    <div class="nav-item" id="nav-migrazione" onclick="showView('migrazione',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M10 4l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Migrazione immagini
+    </div>
     <div class="nav-item" id="nav-suppliers" onclick="showView('suppliers',this)">
       <svg class="ni" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.3"/></svg>Fornitori
     </div>
@@ -500,6 +503,29 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
             <button class="btn btn-p" onclick="addStampatore()">+ Aggiungi voce</button>
           </div>
           <div style="padding:16px" id="stampatori-list"></div>
+        </div>
+      </div>
+
+      <!-- MIGRAZIONE -->
+      <div class="view" id="view-migrazione">
+        <div class="card">
+          <div class="ch"><span class="ct">🔄 Migrazione immagini su Supabase Storage</span></div>
+          <div style="padding:20px">
+            <div style="background:var(--info-bg);border:1px solid #bfdbfe;border-radius:var(--r);padding:14px;margin-bottom:16px;font-size:13px;color:var(--info-t)">
+              <strong>Cosa fa questo strumento:</strong> Sposta tutte le immagini attualmente salvate nel database (base64) su Supabase Storage. Questo riduce drasticamente il consumo di banda mensile. Le immagini rimangono visibili — cambia solo dove sono memorizzate.
+            </div>
+            <div id="mig-status" style="font-size:13px;color:var(--txt2);margin-bottom:16px">Clicca "Avvia migrazione" per analizzare e migrare le immagini.</div>
+            <div id="mig-progress" style="display:none;margin-bottom:16px">
+              <div style="background:var(--bg3);border-radius:99px;height:8px;overflow:hidden">
+                <div id="mig-bar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div>
+              </div>
+              <div id="mig-label" style="font-size:12px;color:var(--txt2);margin-top:6px"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-p" id="mig-btn" onclick="startMigration()">🚀 Avvia migrazione immagini</button>
+              <button class="btn" onclick="analyzeMigration()">🔍 Analizza prima (non modifica nulla)</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -951,11 +977,11 @@ function showView(v,el,skipH){
   $('view-'+v).classList.add('active');
   const nav=el||$('nav-'+v);if(nav)nav.classList.add('active');
   currentView=v;
-  const titles={dashboard:'Dashboard',orders:'Ordini',products:'Catalogo prodotti',suppliers:'Fornitori',statuses:'Status ordini',stampatori:'Stampatori / Ricamatori',ricami:'Programmi Ricamo','order-detail':'Dettaglio ordine','product-detail':'Dettaglio prodotto'};
+  const titles={dashboard:'Dashboard',orders:'Ordini',products:'Catalogo prodotti',suppliers:'Fornitori',statuses:'Status ordini',stampatori:'Stampatori / Ricamatori',migrazione:'Migrazione immagini',ricami:'Programmi Ricamo','order-detail':'Dettaglio ordine','product-detail':'Dettaglio prodotto'};
   $('topbar-title').textContent=titles[v]||v;
   $('back-btn').style.display=v.endsWith('-detail')?'flex':'none';
   const ricBtn=$('export-ric-btn');if(ricBtn)ricBtn.style.display=(v==='order-detail')?'flex':'none';
-  const noMainBtn=['statuses','ricami','stampatori'];
+  const noMainBtn=['statuses','ricami','stampatori','migrazione'];
   $('main-btn').style.display=noMainBtn.includes(v)?'none':'flex';
   $('main-btn').textContent=(v==='products'||v==='product-detail')?'+ Nuovo prodotto':'+ Nuovo ordine';
   if(v==='dashboard')renderDashboard();
@@ -964,6 +990,7 @@ function showView(v,el,skipH){
   if(v==='suppliers'){if(!suppliersData.length)db.from('suppliers_data').select('*').then(r=>{if(r.data)suppliersData=r.data.map(x=>x.data);renderSuppliers();}).catch(()=>renderSuppliers());else renderSuppliers();}
   if(v==='statuses')renderStatuses();
   if(v==='stampatori')renderStampatori();
+  if(v==='migrazione')analyzeMigration();
   if(v==='ricami')renderRicami();
 }
 function goBack(){showView(prevView,$('nav-'+prevView));}
@@ -2693,6 +2720,123 @@ async function removeOrderAttachment(idx){
   o.attachments.splice(idx,1);
   try{await upsert('orders',o.id,o);renderOrderAttachments(o);toast('Documento eliminato');}
   catch(e){toast('Errore eliminazione');}
+}
+
+
+// ── MIGRAZIONE IMMAGINI SU STORAGE ───────────────────────────────────────────
+async function analyzeMigration(){
+  const st=$('mig-status');if(!st)return;
+  let base64Products=0, base64Logos=0, base64Ricami=0, storageCount=0;
+  products.forEach(p=>{
+    (p.images||[]).forEach(img=>{if(img&&img.startsWith('data:image'))base64Products++;else if(img)storageCount++;});
+    if(p.img&&p.img.startsWith('data:image'))base64Products++;
+    (p.logos||[]).forEach(img=>{if(img&&img.startsWith('data:image'))base64Logos++;});
+  });
+  ricami.forEach(r=>{if(r.img&&r.img.startsWith('data:image'))base64Ricami++;});
+  const total=base64Products+base64Logos+base64Ricami;
+  if(total===0){
+    st.innerHTML='<span style="color:var(--ok-t)">✅ Tutte le immagini sono già su Storage! Nessuna migrazione necessaria.</span>';
+  } else {
+    st.innerHTML=`<strong>Trovate ${total} immagini da migrare:</strong><br>
+      • ${base64Products} foto prodotti nel database<br>
+      • ${base64Logos} loghi/stampe nel database<br>
+      • ${base64Ricami} immagini ricami nel database<br>
+      • ${storageCount} già su Storage<br><br>
+      <span style="color:var(--txt2)">Clicca "Avvia migrazione" per spostarle su Storage.</span>`;
+  }
+}
+
+async function startMigration(){
+  const btn=$('mig-btn');
+  const st=$('mig-status');
+  const prog=$('mig-progress');
+  const bar=$('mig-bar');
+  const lbl=$('mig-label');
+  if(btn)btn.disabled=true;
+  if(prog)prog.style.display='block';
+
+  let done=0, errors=0;
+  const tasks=[];
+
+  // Collect all products needing migration
+  for(const p of products){
+    tasks.push({type:'product',id:p.id,obj:p});
+  }
+  for(const r of ricami){
+    if(r.img&&r.img.startsWith('data:image'))tasks.push({type:'ricamo',id:r.id,obj:r});
+  }
+
+  const total=tasks.length;
+  if(total===0){
+    if(st)st.innerHTML='<span style="color:var(--ok-t)">✅ Nessuna migrazione necessaria.</span>';
+    if(btn)btn.disabled=false;
+    return;
+  }
+
+  if(st)st.innerHTML=`Migrazione in corso… (0/${total})`;
+
+  for(const task of tasks){
+    try{
+      if(task.type==='product'){
+        const p=task.obj;
+        let changed=false;
+        // Migrate gallery images
+        if(p.images&&p.images.length){
+          const newImgs=[];
+          for(const img of p.images){
+            if(img&&img.startsWith('data:image')){
+              const url=await uploadToStorage(img,'products');
+              newImgs.push(url);changed=true;
+            } else newImgs.push(img);
+          }
+          if(changed)p.images=newImgs;
+        }
+        // Migrate legacy img
+        if(p.img&&p.img.startsWith('data:image')){
+          p.img=await uploadToStorage(p.img,'products');changed=true;
+        }
+        // Migrate logos
+        if(p.logos&&p.logos.length){
+          const newLogos=[];
+          for(const img of p.logos){
+            if(img&&img.startsWith('data:image')){
+              const url=await uploadToStorage(img,'logos');
+              newLogos.push(url);changed=true;
+            } else newLogos.push(img);
+          }
+          if(changed)p.logos=newLogos;
+        }
+        if(changed){
+          // Save without re-compressing (images already migrated)
+          const {error}=await db.from('products').upsert({id:p.id,data:p,updated_at:new Date().toISOString()});
+          if(error)throw error;
+        }
+      } else if(task.type==='ricamo'){
+        const r=task.obj;
+        if(r.img&&r.img.startsWith('data:image')){
+          r.img=await uploadToStorage(r.img,'ricami');
+          const {error}=await db.from('ricami').upsert({id:r.id,data:r,updated_at:new Date().toISOString()});
+          if(error)throw error;
+        }
+      }
+      done++;
+    }catch(e){
+      errors++;
+      console.error('Migration error for',task.id,e.message);
+    }
+    const pct=Math.round((done+errors)/total*100);
+    if(bar)bar.style.width=pct+'%';
+    if(lbl)lbl.textContent=`${done+errors}/${total} — ${errors>0?errors+' errori':''} `;
+    if(st)st.innerHTML=`Migrazione in corso… ${done+errors}/${total}`;
+  }
+
+  if(btn)btn.disabled=false;
+  if(errors===0){
+    if(st)st.innerHTML=`<span style="color:var(--ok-t)">✅ Migrazione completata! ${done} immagini spostate su Storage.</span>`;
+    toast('✅ Migrazione completata — le immagini sono ora su Storage');
+  } else {
+    if(st)st.innerHTML=`<span style="color:var(--warn-t)">⚠️ Migrazione completata con ${errors} errori su ${total}. Riprova per le immagini fallite.</span>`;
+  }
 }
 
 </script>
