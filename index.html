@@ -284,6 +284,7 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
     </div>
     <div class="sfoot">
       <div class="saving" id="saving"><div class="spinner" style="display:block;border-top-color:var(--accent);border-color:var(--border)"></div>Salvataggio…</div>
+      <button class="btn btn-sm" onclick="manualSync()" style="justify-content:center">🔄 Aggiorna dati</button>
       <button class="btn btn-sm" onclick="doLogout()" style="justify-content:center">Esci dall'account</button>
     </div>
   </nav>
@@ -860,16 +861,6 @@ async function initApp(){
     fillStatusSelects();
     fillRicamoSelect();
     fillSupplierDropdowns();
-    // Auto-sync ogni 2 minuti
-    setInterval(async()=>{
-      try{
-        await loadAll();
-        if(currentView==='dashboard')renderDashboard();
-        if(currentView==='orders')renderOrders();
-        fillStatusSelects();fillRicamoSelect();fillSupplierDropdowns();
-        setSS('ok');
-      }catch(e){setSS('err');}
-    }, 120000);
   }catch(e){setSS('err');toast('Errore connessione: '+e.message);}
 }
 function setSS(s){
@@ -2837,6 +2828,23 @@ async function startMigration(){
   } else {
     if(st)st.innerHTML=`<span style="color:var(--warn-t)">⚠️ Migrazione completata con ${errors} errori su ${total}. Riprova per le immagini fallite.</span>`;
   }
+}
+
+
+// ── SYNC MANUALE ──────────────────────────────────────────────────────────────
+async function manualSync(){
+  setSS('load');
+  try{
+    await loadAll();
+    if(currentView==='dashboard')renderDashboard();
+    if(currentView==='orders')renderOrders();
+    if(currentView==='products')renderProdsTable();
+    if(currentView==='ricami')renderRicami();
+    if(currentView==='suppliers')renderSuppliers();
+    fillStatusSelects();fillRicamoSelect();fillSupplierDropdowns();
+    setSS('ok');
+    toast('✅ Dati aggiornati');
+  }catch(e){setSS('err');toast('Errore aggiornamento: '+e.message);}
 }
 
 </script>
