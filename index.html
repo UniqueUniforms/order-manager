@@ -369,6 +369,7 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
             <div class="df"><label>N° Ordine</label><span id="od-num">—</span></div>
             <div class="df"><label>POM</label><span id="od-pom">—</span></div>
             <div class="df"><label>Ferrara / KGS</label><span id="od-dest">—</span></div>
+            <div class="df"><label>📦 Spedire a</label><span id="od-shipping" style="color:var(--txt)">—</span></div>
             <div class="df"><label>Deadline</label><span id="od-deadline" style="color:var(--orange-t)">—</span></div>
             <div class="df"><label>Alert anticipo</label><span id="od-alert-days">—</span></div>
           </div>
@@ -581,6 +582,9 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
           <div class="fg"><label>Status</label><select id="o-sta"></select></div>
           <div class="fg"><label>Stampatore / Ricamatore</label>
             <select id="o-dest"><option value="">—</option></select>
+          </div>
+          <div class="fg full"><label>📦 Spedire a (indirizzo destinazione finale)</label>
+            <input type="text" id="o-shipping" placeholder="es. Guarisco Trasporti, Via dei Pradei 3, 22070 Grandate (CO)">
           </div>
           <div class="fg"><label>⏰ Deadline (facoltativa)</label><input type="date" id="o-deadline"></div>
           <div class="fg"><label>Alert X giorni prima</label><input type="number" id="o-alert-days" min="1" max="30" placeholder="es. 7" value="7"></div>
@@ -1081,7 +1085,7 @@ function openOrdDet(id){
   $('od-date').textContent=fmtDate(o.date);
   $('od-num').textContent=o.num||'—';
   $('od-pom').textContent=o.pom||'—';
-  $('od-dest').textContent=o.dest||'—';
+  $('od-dest').textContent=o.dest||'—';if($('od-shipping'))$('od-shipping').textContent=o.shipping||'—';
   $('od-notes').textContent=o.notes||'—';
   if(o.deadline){
     const days=deadlineDays(o.deadline);
@@ -1171,7 +1175,7 @@ function openEditOrdById(id){
   fillStatusSelects();fillStampatoreSelect('o-dest',o.dest||'');fillSupplierDropdowns();
   $('o-date').value=o.date||'';$('o-num').value=o.num||'';$('o-sup').value=o.supplier||'';
   $('o-school').value=o.school||'';$('o-desc').value=o.desc||'';$('o-pom').value=o.pom||'';
-  $('o-sta').value=o.status||'';fillStampatoreSelect('o-dest',o.dest||'');$('o-notes').value=o.notes||'';
+  $('o-sta').value=o.status||'';fillStampatoreSelect('o-dest',o.dest||'');$('o-shipping').value=o.shipping||'';$('o-notes').value=o.notes||'';
   $('o-deadline').value=o.deadline||'';$('o-alert-days').value=o.alertDays||7;
   orderRows=(o.products||[]).map(p=>({pid:p.pid,sizes:{...p.sizes}}));
   renderOrderRows();$('modal-order').style.display='flex';
@@ -1182,7 +1186,7 @@ function openNewOrder(){
   fillStatusSelects();fillStampatoreSelect('o-dest');fillSupplierDropdowns();
   $('o-date').value=new Date().toISOString().split('T')[0];
   ['o-num','o-school','o-desc','o-pom','o-notes','o-deadline'].forEach(id=>{$(id).value='';});
-  $('o-alert-days').value=7;$('o-sup').value='';$('o-dest').value='';
+  $('o-alert-days').value=7;$('o-sup').value='';$('o-dest').value='';$('o-shipping').value='';
   orderRows=[];renderOrderRows();$('modal-order').style.display='flex';
 }
 async function delCurrentOrd(){if(!editingOrdId||!confirm('Eliminare?'))return;try{await del('orders',editingOrdId);orders=orders.filter(o=>o.id!==editingOrdId);CM('modal-order');renderOrders();renderDashboard();toast('Ordine eliminato');}catch(e){}}
@@ -1227,10 +1231,10 @@ async function saveOrder(){
   const prods=orderRows.map(r=>r.manual?{manual:true,note:r.note,sizes:{}}:{pid:r.pid,sizes:Object.fromEntries(Object.entries(r.sizes).filter(([,v])=>v>0))});
   if(editingOrdId){
     const o=orders.find(x=>x.id===editingOrdId);if(!o)return;
-    Object.assign(o,{date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods});
+    Object.assign(o,{date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),shipping:gv('o-shipping'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods});
     try{await upsert('orders',o.id,o);CM('modal-order');if(currentView==='orders')renderOrders();if(currentView==='dashboard')renderDashboard();if(currentView==='order-detail')openOrdDet(editingOrdId);toast('✅ Ordine aggiornato');}catch(e){}
   } else {
-    const o={id:'o'+Date.now(),date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods,thread:[]};
+    const o={id:'o'+Date.now(),date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),shipping:gv('o-shipping'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods,thread:[]};
     try{await upsert('orders',o.id,o);orders.unshift(o);CM('modal-order');if(currentView==='dashboard')renderDashboard();if(currentView==='orders')renderOrders();toast('✅ Ordine salvato');}catch(e){}
   }
 }
@@ -2032,6 +2036,13 @@ async function exportRicamatore(){
     let gt=0;usedSizes.forEach(s=>gt+=grand[s]||0);
     htm+=`<tr class="grand"><td class="n">TOTALE GENERALE</td>${usedSizes.map(s=>`<td class="tot">${grand[s]||''}</td>`).join('')}<td class="tot" style="font-size:15px">${gt}</td></tr>`;
     htm+=`</tbody></table>`;
+    // Shipping block — large, before notes
+    if(o.shipping){
+      htm+=`<div style="margin-top:16px;border:2px solid #2563EB;border-radius:8px;overflow:hidden">
+        <div style="background:#2563EB;color:white;padding:10px 16px;font-size:13px;font-weight:bold">📦 SPEDIRE A:</div>
+        <div style="padding:14px 16px;font-size:16px;font-weight:bold;color:#1A1A2E;letter-spacing:.01em">${o.shipping}</div>
+      </div>`;
+    }
     // Note modificabile nel riepilogo
     htm+=`<div style="margin-top:14px">
       <div class="notes-label">📝 NOTE / ISTRUZIONI AGGIUNTIVE:</div>
