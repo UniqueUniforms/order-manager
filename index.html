@@ -263,6 +263,9 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
     <div class="nav-item" id="nav-orders" onclick="showView('orders',this)">
       <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="11" x2="9" y2="11" stroke="currentColor" stroke-width="1.3"/></svg>Ordini
     </div>
+    <div class="nav-item" id="nav-proposte" onclick="showView('proposte',this)">
+      <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 5h6M5 8h4M10 11l1.5 1.5L14 9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Proposte
+    </div>
     <div class="nav-item" id="nav-products" onclick="showView('products',this)">
       <svg class="ni" viewBox="0 0 16 16" fill="none"><rect x="1" y="6" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6V4a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="10.5" r="1.2" fill="currentColor"/></svg>Catalogo
     </div>
@@ -531,6 +534,20 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
         </div>
       </div>
 
+      <!-- PROPOSTE -->
+      <div class="view" id="view-proposte">
+        <div class="card">
+          <div class="ch">
+            <span class="ct">Proposte commerciali</span>
+            <div class="fbar">
+              <input type="text" placeholder="Cerca cliente o oggetto…" id="proposte-q" oninput="renderProposte()" style="width:200px">
+            </div>
+            <button class="btn btn-p" onclick="openNewProposta()">+ Nuova proposta</button>
+          </div>
+          <div id="proposte-list" style="padding:16px"></div>
+        </div>
+      </div>
+
       <!-- FORNITORI -->
       <div class="view" id="view-suppliers">
         <div class="card">
@@ -718,6 +735,39 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
           oninput="renderRicamoPickerList()"
           style="width:100%;padding:9px 12px;border-radius:var(--r);border:1px solid var(--border);font-family:inherit;font-size:13px;background:var(--bg);color:var(--txt);margin-bottom:10px">
         <div id="ricamo-picker-list" style="max-height:380px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROPOSTA MODAL -->
+  <div class="ov" id="modal-proposta" style="display:none">
+    <div class="modal" style="max-width:620px">
+      <div class="mh"><h2 id="proposta-modal-title">Nuova proposta</h2><button class="mc" onclick="CM('modal-proposta')">×</button></div>
+      <div class="mb" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label>Cliente / Scuola *</label><input type="text" id="pr-client" placeholder="es. Tasis, Basel..."></div>
+        <div class="fg"><label>Email cliente</label><input type="email" id="pr-email" placeholder="email@scuola.ch"></div>
+        <div class="fg full"><label>Oggetto proposta *</label><input type="text" id="pr-subject" placeholder="es. Polo estiva 2027 - proposta colori"></div>
+        <div class="fg"><label>Status</label>
+          <select id="pr-status">
+            <option value="In attesa">In attesa</option>
+            <option value="Inviata">Inviata</option>
+            <option value="Sollecitata">Sollecitata</option>
+            <option value="Confermata">Confermata</option>
+            <option value="Rifiutata">Rifiutata</option>
+          </select>
+        </div>
+        <div class="fg"><label>Data ultimo sollecito</label><input type="date" id="pr-followup"></div>
+        <div class="fg full"><label>Descrizione / Note</label><textarea id="pr-desc" rows="4" placeholder="Descrivi la proposta, prodotti, colori, quantità stimate…" style="resize:vertical"></textarea></div>
+        <div class="fg full">
+          <label>🖼️ Immagini mock-up (max 4)</label>
+          <div id="pr-images-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px;min-height:20px"></div>
+          <div class="dropzone" id="pr-images-dropzone">📷 Carica immagini mock-up (JPG, PNG)<input type="file" multiple accept="image/*" id="pr-images-input" onchange="handlePropostaImages(event)"></div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn btn-r" id="pr-del-btn" onclick="deleteProposta()" style="display:none">Elimina</button>
+        <button class="btn" onclick="CM('modal-proposta')">Annulla</button>
+        <button class="btn btn-p" onclick="saveProposta()">Salva proposta</button>
       </div>
     </div>
   </div>
@@ -972,11 +1022,11 @@ function showView(v,el,skipH){
   $('view-'+v).classList.add('active');
   const nav=el||$('nav-'+v);if(nav)nav.classList.add('active');
   currentView=v;
-  const titles={dashboard:'Dashboard',orders:'Ordini',products:'Catalogo prodotti',suppliers:'Fornitori',statuses:'Status ordini',stampatori:'Stampatori / Ricamatori',migrazione:'Migrazione immagini',ricami:'Programmi Ricamo','order-detail':'Dettaglio ordine','product-detail':'Dettaglio prodotto'};
+  const titles={dashboard:'Dashboard',orders:'Ordini',products:'Catalogo prodotti',suppliers:'Fornitori',statuses:'Status ordini',stampatori:'Stampatori / Ricamatori',migrazione:'Migrazione immagini',proposte:'Proposte commerciali',ricami:'Programmi Ricamo','order-detail':'Dettaglio ordine','product-detail':'Dettaglio prodotto'};
   $('topbar-title').textContent=titles[v]||v;
   $('back-btn').style.display=v.endsWith('-detail')?'flex':'none';
   const ricBtn=$('export-ric-btn');if(ricBtn)ricBtn.style.display=(v==='order-detail')?'flex':'none';
-  const noMainBtn=['statuses','ricami','stampatori','migrazione'];
+  const noMainBtn=['statuses','ricami','stampatori','migrazione','proposte'];
   $('main-btn').style.display=noMainBtn.includes(v)?'none':'flex';
   $('main-btn').textContent=(v==='products'||v==='product-detail')?'+ Nuovo prodotto':'+ Nuovo ordine';
   if(v==='dashboard')renderDashboard();
@@ -986,6 +1036,7 @@ function showView(v,el,skipH){
   if(v==='statuses')renderStatuses();
   if(v==='stampatori')renderStampatori();
   if(v==='migrazione')analyzeMigration();
+  if(v==='proposte')renderProposte();
   if(v==='ricami')renderRicami();
 }
 function goBack(){showView(prevView,$('nav-'+prevView));}
@@ -2856,6 +2907,174 @@ async function manualSync(){
     setSS('ok');
     toast('✅ Dati aggiornati');
   }catch(e){setSS('err');toast('Errore aggiornamento: '+e.message);}
+}
+
+
+// ── PROPOSTE COMMERCIALI ──────────────────────────────────────────────────────
+let proposte = [];
+let editingPropostaId = null;
+let pendingPropostaImages = [];
+
+const PROPOSTA_STATUS_COLORS = {
+  'In attesa':  {bg:'#F1F5F9',color:'#475569'},
+  'Inviata':    {bg:'#DBEAFE',color:'#1e40af'},
+  'Sollecitata':{bg:'#FEF3C7',color:'#92400E'},
+  'Confermata': {bg:'#DCFCE7',color:'#166534'},
+  'Rifiutata':  {bg:'#FEE2E2',color:'#991b1b'},
+};
+
+function pbadge(status){
+  const s=PROPOSTA_STATUS_COLORS[status]||{bg:'#F1F5F9',color:'#475569'};
+  return `<span style="background:${s.bg};color:${s.color};padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap">${status||'—'}</span>`;
+}
+
+async function loadProposte(){
+  try{
+    const {data,error}=await db.from('proposte').select('*').order('updated_at',{ascending:false});
+    if(error)throw error;
+    proposte=(data||[]).map(r=>({id:r.id,...r.data}));
+  }catch(e){
+    // Table might not exist yet — try to create it
+    console.warn('Proposte table not found, will be created on first save');
+    proposte=[];
+  }
+}
+
+async function upsertProposta(id,data){
+  const {error}=await db.from('proposte').upsert({id,data:{...data},updated_at:new Date().toISOString()});
+  if(error)throw error;
+}
+
+async function deleteProposta(){
+  if(!editingPropostaId)return;
+  if(!confirm('Eliminare questa proposta? L operazione non puo essere annullata.'))return;
+  const {error}=await db.from('proposte').delete().eq('id',editingPropostaId);
+  if(error){toast('Errore eliminazione');return;}
+  proposte=proposte.filter(p=>p.id!==editingPropostaId);
+  CM('modal-proposta');
+  renderProposte();
+  toast('Proposta eliminata');
+}
+
+function renderProposte(){
+  const c=document.getElementById('proposte-list');if(!c)return;
+  const q=((document.getElementById('proposte-q')||{}).value||'').toLowerCase().trim();
+  const list=proposte.filter(p=>!q||(p.client||'').toLowerCase().includes(q)||(p.subject||'').toLowerCase().includes(q));
+
+  if(!list.length){
+    c.innerHTML=`<div class="empty-msg">${proposte.length?'Nessun risultato.':'Nessuna proposta ancora. Clicca "+ Nuova proposta" per iniziare.'}</div>`;
+    return;
+  }
+
+  c.innerHTML=list.map(p=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px;cursor:pointer;background:var(--bg);transition:background .1s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='var(--bg)'" onclick="openEditProposta('${p.id}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700;margin-bottom:2px">${p.client||'—'}</div>
+        <div style="font-size:12px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.subject||'—'}</div>
+        ${p.email?`<div style="font-size:11px;color:var(--txt3);margin-top:2px">${p.email}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
+        ${pbadge(p.status)}
+        ${p.followup?`<div style="font-size:11px;color:var(--txt3)">📅 ${p.followup}</div>`:''}
+        ${p.images&&p.images.length?`<div style="font-size:10px;color:var(--txt3)">🖼️ ${p.images.length} immagin${p.images.length>1?'i':'e'}</div>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function openNewProposta(){
+  editingPropostaId=null;
+  pendingPropostaImages=[];
+  document.getElementById('proposta-modal-title').textContent='Nuova proposta';
+  document.getElementById('pr-del-btn').style.display='none';
+  ['pr-client','pr-email','pr-subject','pr-followup'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pr-status').value='In attesa';
+  document.getElementById('pr-desc').value='';
+  renderPropostaImagesGrid();
+  document.getElementById('modal-proposta').style.display='flex';
+}
+
+function openEditProposta(id){
+  const p=proposte.find(x=>x.id===id);if(!p)return;
+  editingPropostaId=id;
+  pendingPropostaImages=[...(p.images||[])];
+  document.getElementById('proposta-modal-title').textContent='Modifica proposta';
+  document.getElementById('pr-del-btn').style.display='inline-flex';
+  document.getElementById('pr-client').value=p.client||'';
+  document.getElementById('pr-email').value=p.email||'';
+  document.getElementById('pr-subject').value=p.subject||'';
+  document.getElementById('pr-status').value=p.status||'In attesa';
+  document.getElementById('pr-followup').value=p.followup||'';
+  document.getElementById('pr-desc').value=p.desc||'';
+  renderPropostaImagesGrid();
+  document.getElementById('modal-proposta').style.display='flex';
+}
+
+function renderPropostaImagesGrid(){
+  const g=document.getElementById('pr-images-grid');if(!g)return;
+  g.innerHTML=pendingPropostaImages.map((img,i)=>`
+    <div style="position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border);aspect-ratio:1">
+      <img src="${img}" style="width:100%;height:100%;object-fit:cover">
+      <button onclick="removePropostaImage(${i})" style="position:absolute;top:3px;right:3px;background:rgba(220,38,38,.85);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center">×</button>
+    </div>`).join('');
+}
+
+function removePropostaImage(idx){
+  pendingPropostaImages.splice(idx,1);
+  renderPropostaImagesGrid();
+}
+
+async function handlePropostaImages(e){
+  const files=Array.from(e.target.files);
+  const remaining=4-pendingPropostaImages.length;
+  if(remaining<=0){toast('Massimo 4 immagini per proposta');return;}
+  for(const f of files.slice(0,remaining)){
+    const base64=await new Promise(res=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.readAsDataURL(f);});
+    const compressed=await compressImg(base64,800,0.8);
+    const url=await uploadToStorage(compressed,'proposte');
+    pendingPropostaImages.push(url);
+  }
+  renderPropostaImagesGrid();
+  e.target.value='';
+}
+
+async function saveProposta(){
+  const gv=id=>(document.getElementById(id)||{}).value||'';
+  const client=gv('pr-client').trim();
+  const subject=gv('pr-subject').trim();
+  if(!client||!subject){toast('Inserisci almeno cliente e oggetto');return;}
+
+  const data={
+    client, subject,
+    email:gv('pr-email'),
+    status:gv('pr-status'),
+    followup:gv('pr-followup'),
+    desc:gv('pr-desc'),
+    images:[...pendingPropostaImages],
+  };
+
+  try{
+    const id=editingPropostaId||('pr'+Date.now());
+    await upsertProposta(id,data);
+    data.id=id;
+    if(editingPropostaId){
+      const idx=proposte.findIndex(x=>x.id===id);
+      if(idx>=0)proposte[idx]={...data};
+    } else {
+      proposte.unshift({...data});
+    }
+    CM('modal-proposta');
+    renderProposte();
+    toast('✅ Proposta salvata');
+  }catch(e){
+    // If table doesn't exist, create it first
+    if(e.message&&(e.message.includes('42P01')||e.message.includes('does not exist'))){
+      toast('Creazione tabella proposte in corso…');
+      await db.rpc('exec_sql',{sql:`create table if not exists proposte (id text primary key, data jsonb, updated_at timestamptz default now()); grant all on proposte to anon, authenticated, service_role;`}).catch(()=>{});
+      toast('Errore: crea la tabella "proposte" su Supabase (vedi istruzioni)');
+    } else {
+      toast('Errore: '+e.message.slice(0,80));
+    }
+  }
 }
 
 </script>
