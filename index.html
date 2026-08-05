@@ -1036,7 +1036,7 @@ function showView(v,el,skipH){
   if(v==='statuses')renderStatuses();
   if(v==='stampatori')renderStampatori();
   if(v==='migrazione')analyzeMigration();
-  if(v==='proposte')renderProposte();
+  if(v==='proposte'){loadProposte().then(()=>renderProposte());};
   if(v==='ricami')renderRicami();
 }
 function goBack(){showView(prevView,$('nav-'+prevView));}
