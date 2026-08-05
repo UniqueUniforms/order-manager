@@ -2933,8 +2933,8 @@ async function loadProposte(){
     const {data,error}=await db.from('proposte').select('*').order('updated_at',{ascending:false});
     if(error)throw error;
     proposte=(data||[]).map(r=>({id:r.id,...r.data}));
+    if(document.getElementById('view-proposte')?.classList.contains('active'))renderProposte();
   }catch(e){
-    // Table might not exist yet — try to create it
     console.warn('Proposte table not found, will be created on first save');
     proposte=[];
   }
