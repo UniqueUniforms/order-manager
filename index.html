@@ -908,13 +908,26 @@ async function initApp(){
   setSS('load');
   try{
     db=supabase.createClient(SUPA_URL,SUPA_KEY);
-    await loadAll();
+    // Carica prima ordini e statuses — servono per la dashboard
+    const [or,st]=await Promise.all([
+      db.from('orders').select('*'),
+      db.from('statuses').select('*')
+    ]);
+    if(or.error)throw or.error;
+    orders=or.data.map(r=>r.data);
+    statuses=(st.data&&st.data.length)?st.data.map(r=>r.data):DEFAULT_STATUSES;
+    // Mostra subito la dashboard
     setSS('ok');
     loadStampatoreOptions();
     renderDashboard();
     fillStatusSelects();
-    fillRicamoSelect();
-    fillSupplierDropdowns();
+    // Carica il resto in background senza bloccare l'UI
+    Promise.all([
+      db.from('products').select('*').then(r=>{if(!r.error)products=r.data.map(x=>x.data);}),
+      db.from('ricami').select('*').then(r=>{if(!r.error)ricami=r.data.map(x=>x.data);fillRicamoSelect();}),
+      db.from('suppliers_data').select('*').then(r=>{if(!r.error)suppliersData=r.data.map(x=>x.data);fillSupplierDropdowns();}),
+      loadProposte(),
+    ]).catch(e=>console.warn('Background load error:',e.message));
   }catch(e){setSS('err');toast('Errore connessione: '+e.message);}
 }
 function setSS(s){
