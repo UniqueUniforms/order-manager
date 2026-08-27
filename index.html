@@ -1468,7 +1468,7 @@ async function uploadFiles(e){
   });e.target.value='';
 }
 async function rmFile(pid,idx){const p=products.find(x=>x.id===pid);if(!p)return;p.files.splice(idx,1);await upsert('products',p.id,p);renderFilesList(p);}
-function dlFile(name,dataUrl){const a=document.createElement('a');a.href=dataUrl;a.download=name;a.click();}
+function dlFile(name,src){if(src&&src.startsWith('data:')){const a=document.createElement('a');a.href=src;a.download=name;a.click();}else if(src){window.open(src,'_blank');}}
 
 // ── CATALOG TABLE ─────────────────────────────────────────────────────────────
 function renderProdsTable(){
@@ -2346,6 +2346,29 @@ async function uploadToStorage(base64DataUrl, folder='products'){
   }
 }
 
+async function uploadFileToStorage(base64DataUrl, folder='attachments'){
+  if(!base64DataUrl||!base64DataUrl.startsWith('data:'))return base64DataUrl;
+  try{
+    const res=await fetch(base64DataUrl);
+    const blob=await res.blob();
+    const mime=blob.type||'application/octet-stream';
+    let ext='bin';
+    if(mime.includes('pdf'))ext='pdf';
+    else if(mime.includes('png'))ext='png';
+    else if(mime.includes('jpeg')||mime.includes('jpg'))ext='jpg';
+    else if(mime.includes('spreadsheet')||mime.includes('excel'))ext='xlsx';
+    else if(mime.includes('word')||mime.includes('document'))ext='docx';
+    const filename=`${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const {data,error}=await db.storage.from('images').upload(filename,blob,{contentType:mime,upsert:false});
+    if(error){console.warn('Storage upload failed, using base64:',error.message);return base64DataUrl;}
+    const {data:urlData}=db.storage.from('images').getPublicUrl(filename);
+    return urlData.publicUrl;
+  }catch(e){
+    console.warn('Storage upload error, using base64:',e.message);
+    return base64DataUrl;
+  }
+}
+
 async function deleteFromStorage(url){
   if(!url||!url.includes('supabase.co/storage'))return;
   try{
@@ -2754,7 +2777,7 @@ function renderOrderAttachments(o){
       <div class="fic ${em[ext]||'fi-other'}">${ext.toUpperCase()}</div>
       <div style="flex:1;min-width:0"><div class="fname">${f.name}</div><div class="fsz">${f.size||''} · ${f.date||''}</div></div>
       <div style="display:flex;gap:4px">
-        ${f.dataUrl?`<button class="btn btn-sm" onclick="dlFile('${f.name}','${f.dataUrl}')">Scarica</button>`:''}
+        ${(f.url||f.dataUrl)?`<button class="btn btn-sm" onclick="dlFile('${f.name}','${f.url||f.dataUrl}')">Scarica</button>`:''}
         <button class="btn btn-sm btn-r" onclick="removeOrderAttachment(${i})">×</button>
       </div>
     </div>`;
@@ -2766,14 +2789,13 @@ async function addOrderAttachment(e){
   if(!o.attachments)o.attachments=[];
   const files=Array.from(e.target.files);
   toast('Caricamento documenti…');
-  let done=0;
   for(const f of files){
     const dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.readAsDataURL(f);});
+    const url=await uploadFileToStorage(dataUrl,'attachments');
     const kb=Math.round(f.size/1024);
     const now=new Date();
     const dateStr=`${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getFullYear()}`;
-    o.attachments.push({name:f.name,size:kb>1024?`${(kb/1024).toFixed(1)} MB`:`${kb} KB`,date:dateStr,dataUrl});
-    done++;
+    o.attachments.push({name:f.name,size:kb>1024?`${(kb/1024).toFixed(1)} MB`:`${kb} KB`,date:dateStr,url});
   }
   try{await upsert('orders',o.id,o);renderOrderAttachments(o);toast('✅ Documento allegato');}
   catch(e2){toast('Errore: '+e2.message);}
@@ -2799,14 +2821,17 @@ async function analyzeMigration(){
     (p.logos||[]).forEach(img=>{if(img&&img.startsWith('data:image'))base64Logos++;});
   });
   ricami.forEach(r=>{if(r.img&&r.img.startsWith('data:image'))base64Ricami++;});
-  const total=base64Products+base64Logos+base64Ricami;
+  let base64Attachments=0;
+  orders.forEach(o=>{(o.attachments||[]).forEach(a=>{if(a&&a.dataUrl)base64Attachments++;});});
+  const total=base64Products+base64Logos+base64Ricami+base64Attachments;
   if(total===0){
     st.innerHTML='<span style="color:var(--ok-t)">✅ Tutte le immagini sono già su Storage! Nessuna migrazione necessaria.</span>';
   } else {
-    st.innerHTML=`<strong>Trovate ${total} immagini da migrare:</strong><br>
+    st.innerHTML=`<strong>Trovate ${total} immagini/documenti da migrare:</strong><br>
       • ${base64Products} foto prodotti nel database<br>
       • ${base64Logos} loghi/stampe nel database<br>
       • ${base64Ricami} immagini ricami nel database<br>
+      • ${base64Attachments} documenti allegati ordini nel database<br>
       • ${storageCount} già su Storage<br><br>
       <span style="color:var(--txt2)">Clicca "Avvia migrazione" per spostarle su Storage.</span>`;
   }
@@ -2830,6 +2855,9 @@ async function startMigration(){
   }
   for(const r of ricami){
     if(r.img&&r.img.startsWith('data:image'))tasks.push({type:'ricamo',id:r.id,obj:r});
+  }
+  for(const o of orders){
+    if((o.attachments||[]).some(a=>a&&a.dataUrl))tasks.push({type:'order',id:o.id,obj:o});
   }
 
   const total=tasks.length;
@@ -2882,6 +2910,20 @@ async function startMigration(){
         if(r.img&&r.img.startsWith('data:image')){
           r.img=await uploadToStorage(r.img,'ricami');
           const {error}=await db.from('ricami').upsert({id:r.id,data:r,updated_at:new Date().toISOString()});
+          if(error)throw error;
+        }
+      } else if(task.type==='order'){
+        const o=task.obj;
+        let changed=false;
+        for(const a of (o.attachments||[])){
+          if(a&&a.dataUrl){
+            a.url=await uploadFileToStorage(a.dataUrl,'attachments');
+            delete a.dataUrl;
+            changed=true;
+          }
+        }
+        if(changed){
+          const {error}=await db.from('orders').upsert({id:o.id,data:o,updated_at:new Date().toISOString()});
           if(error)throw error;
         }
       }
