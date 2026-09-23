@@ -333,8 +333,10 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
               <select class="fsel" id="ord-sup" onchange="renderOrders()"><option value="">Tutti i fornitori</option></select>
               <select class="fsel" id="ord-sch" onchange="renderOrders()"><option value="">Tutti i clienti</option></select>
               <select class="fsel" id="ord-sta" onchange="renderOrders()"><option value="">Tutti gli status</option></select>
+              <select class="fsel" id="ord-dest" onchange="renderOrders()"><option value="">Tutti gli stampatori/ricamatori</option></select>
               <input type="date" id="ord-from" onchange="renderOrders()" title="Da data" style="width:130px">
               <input type="date" id="ord-to" onchange="renderOrders()" title="A data" style="width:130px">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);white-space:nowrap;cursor:pointer"><input type="checkbox" id="ord-hide-done" checked onchange="renderOrders()"> Nascondi conclusi</label>
               <button class="btn btn-sm" onclick="resetOrdFilters()">Reset</button>
             </div>
           </div>
@@ -863,6 +865,16 @@ const SIZE_CATS=[
   {name:'Unica', sizes:['Unica']},
 ];
 const ALL_SIZES=[...new Set(SIZE_CATS.flatMap(c=>c.sizes))];
+const SIZE_ORDER=['3YXS','2YXS','YXS','XXS','XS','S','M','L','XL','XXL','3XL','4XL','5XL','1/2','2/4','3/4','4/6','5/6','6/8','7/8','8/10','9/11','10/12','12/13','12/14','2','4','6','8','10','12','14','Unica'];
+function sortBySize(arr){
+  return [...arr].sort((a,b)=>{
+    const ia=SIZE_ORDER.indexOf(a),ib=SIZE_ORDER.indexOf(b);
+    if(ia===-1&&ib===-1)return a.localeCompare(b);
+    if(ia===-1)return 1;
+    if(ib===-1)return -1;
+    return ia-ib;
+  });
+}
 const DEFAULT_STATUSES=[
   {id:'s1',name:'ORDINE CONFERMATO',color:'b-amber'},
   {id:'s2',name:'SPEDITO A FERRARA',color:'b-amber'},
@@ -1097,18 +1109,23 @@ function renderDashboard(){
 }
 
 // ── ORDERS ────────────────────────────────────────────────────────────────────
-function resetOrdFilters(){['ord-q','ord-sup','ord-sch','ord-sta','ord-from','ord-to'].forEach(id=>{const el=$(id);if(el)el.value='';});renderOrders();}
+function resetOrdFilters(){['ord-q','ord-sup','ord-sch','ord-sta','ord-dest','ord-from','ord-to'].forEach(id=>{const el=$(id);if(el)el.value='';});const hd=$('ord-hide-done');if(hd)hd.checked=true;renderOrders();}
 function sortOrds(f){if(sortField===f)sortDir*=-1;else{sortField=f;sortDir=f==='date'?-1:1;}document.querySelectorAll('[id^="sa-"]').forEach(e=>e.textContent='');const arr=$('sa-'+f);if(arr)arr.textContent=sortDir===1?' ↑':' ↓';renderOrders();}
 function renderOrders(){
   const q=($('ord-q')||{}).value?.toLowerCase()||'',sup=($('ord-sup')||{}).value||'',sch=($('ord-sch')||{}).value||'',sta=($('ord-sta')||{}).value||'';
+  const dest=($('ord-dest')||{}).value||'';
+  const hideDone=($('ord-hide-done')||{}).checked||false;
   const from=($('ord-from')||{}).value||'',to=($('ord-to')||{}).value||'';
+  const isDone=o=>(statuses.find(s=>s.name===o.status)||{}).color==='b-green';
   const map=pm();
-  let list=orders.filter(o=>{
+  let all=orders.filter(o=>{
     const m=!q||[o.num,o.school,o.desc,o.supplier].some(x=>x?.toLowerCase().includes(q));
-    return m&&(!sup||o.supplier===sup)&&(!sch||o.school===sch)&&(!sta||o.status===sta)&&(!from||o.date>=from)&&(!to||o.date<=to);
+    return m&&(!sup||o.supplier===sup)&&(!sch||o.school===sch)&&(!sta||o.status===sta)&&(!dest||o.dest===dest)&&(!from||o.date>=from)&&(!to||o.date<=to);
   });
+  const hiddenCount=hideDone?all.filter(isDone).length:0;
+  let list=hideDone?all.filter(o=>!isDone(o)):all;
   list.sort((a,b)=>{let va,vb;if(sortField==='total'){va=calcTotal(a);vb=calcTotal(b);}else{va=a[sortField]||'';vb=b[sortField]||'';}return va<vb?-sortDir:va>vb?sortDir:0;});
-  $('ord-count').textContent=`${list.length} ordini trovati`;
+  $('ord-count').textContent=`${list.length} ordini trovati`+(hiddenCount?` (${hiddenCount} conclusi nascosti)`:'');
   $('ords-tbody').innerHTML=list.length?list.map(o=>{
     const days=o.deadline?deadlineDays(o.deadline):null;
     const dlCell=o.deadline?`<span style="font-size:12px;color:${days<=3?'var(--danger-t)':days<=7?'var(--orange-t)':'var(--txt2)'}">${fmtDate(o.deadline)}${days<=7&&days>=0?' ('+days+'g)':''}</span>`:'<span style="color:var(--txt3)">—</span>';
@@ -1131,6 +1148,12 @@ function renderOrders(){
 function fillOrdFilters(){
   $('ord-sup').innerHTML='<option value="">Tutti i fornitori</option>'+[...new Set(orders.map(o=>o.supplier))].sort().map(s=>`<option>${s}</option>`).join('');
   $('ord-sch').innerHTML='<option value="">Tutti i clienti</option>'+[...new Set(orders.map(o=>o.school))].sort().map(s=>`<option>${s}</option>`).join('');
+  const destSel=$('ord-dest');
+  if(destSel){
+    const cur=destSel.value;
+    const destVals=[...new Set(orders.map(o=>o.dest).filter(Boolean))].sort();
+    destSel.innerHTML='<option value="">Tutti gli stampatori/ricamatori</option>'+destVals.map(d=>`<option ${d===cur?'selected':''}>${d}</option>`).join('');
+  }
   fillStatusSelects();
 }
 
@@ -1199,7 +1222,7 @@ function renderOrdProds(o){
       </div>`;
     }
     const p=map[pr.pid]||{};const sz=pr.sizes||{};
-    const used=Object.keys(sz).filter(s=>+sz[s]>0);
+    const used=sortBySize(Object.keys(sz).filter(s=>+sz[s]>0));
     if(!used.length&&!pr.manual)return'';
     const tot=used.reduce((a,s)=>a+(+sz[s]||0),0);
     const codes=[];
@@ -2019,7 +2042,7 @@ async function exportRicamatore(){
     const map=pm();
     const rmapObj=Object.fromEntries(ricami.map(r=>[r.id,r]));
     // Build dynamic size list from actual order data instead of fixed list
-    const ALL_SZ_FIXED=['3YXS','2YXS','YXS','XXS','XS','S','M','L','XL','XXL','3XL','4XL','5XL','1/2','2/4','3/4','4/6','5/6','6/8','7/8','8/10','9/11','10/12','12/13','12/14','2','4','6','8','10','12','14','Unica'];
+    const ALL_SZ_FIXED=SIZE_ORDER;
     // Get all sizes actually used in this order
     const allUsedSizes=new Set();
     for(const pr of (o.products||[]))Object.keys(pr.sizes||{}).forEach(s=>{if(+pr.sizes[s]>0)allUsedSizes.add(s);});
