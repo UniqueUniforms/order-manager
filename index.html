@@ -488,7 +488,10 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
             <div class="fbar">
               <input type="text" placeholder="Cerca per codice o scuola…" id="ricami-q" oninput="renderRicami()" style="width:220px">
             </div>
-            <button class="btn btn-p" onclick="openNewRicamo()">+ Nuovo programma</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn" onclick="openImportRicami()">📥 Importa prezzi da Excel</button>
+              <button class="btn btn-p" onclick="openNewRicamo()">+ Nuovo programma</button>
+            </div>
           </div>
           <div style="padding:16px" id="ricami-list"><div class="empty-msg">Nessun programma ricamo ancora.</div></div>
         </div>
@@ -723,6 +726,30 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
         <div class="mf-r">
           <button class="btn" onclick="CM('modal-ricamo')">Annulla</button>
           <button class="btn btn-p" onclick="saveRicamo()">Salva programma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORTA PREZZI RICAMO MODAL -->
+  <div class="ov" id="modal-import-ricami" style="display:none">
+    <div class="modal" style="max-width:880px">
+      <div class="mh"><h2>📥 Importa prezzi programmi ricamo da Excel</h2><button class="mc" onclick="CM('modal-import-ricami')">×</button></div>
+      <div class="mb">
+        <div id="imp-ric-step1">
+          <div style="font-size:13px;color:var(--txt2);margin-bottom:12px">Carica il file Excel dei prezzi (es. "Prezzi impianti e servizi"). L'app confronta automaticamente i codici con i programmi ricamo già presenti e propone gli aggiornamenti di prezzo — nulla viene salvato finché non confermi.</div>
+          <div class="dropzone" id="imp-ric-dropzone">📄 Trascina o clicca per caricare il file Excel
+            <input type="file" accept=".xlsx,.xls" onchange="handleImportRicamiFile(event)">
+          </div>
+          <div id="imp-ric-loading" style="display:none;font-size:13px;color:var(--txt2);margin-top:10px">Analisi del file in corso…</div>
+        </div>
+        <div id="imp-ric-results" style="display:none"></div>
+      </div>
+      <div class="mf">
+        <div style="font-size:12px;color:var(--txt3)" id="imp-ric-summary"></div>
+        <div class="mf-r">
+          <button class="btn" onclick="CM('modal-import-ricami')">Chiudi</button>
+          <button class="btn btn-p" id="imp-ric-confirm-btn" style="display:none" onclick="applyRicamiImport()">Conferma importazione</button>
         </div>
       </div>
     </div>
@@ -1670,6 +1697,220 @@ async function saveRicamo(){
 }
 async function delCurrentRicamo(){if(!editingRicamoId||!confirm('Eliminare?'))return;try{await del('ricami',editingRicamoId);ricami=ricami.filter(r=>r.id!==editingRicamoId);CM('modal-ricamo');renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
 async function delRicamo(id){if(!confirm('⚠️ Eliminare definitivamente questo elemento? L\'operazione non può essere annullata.'))return;try{await del('ricami',id);ricami=ricami.filter(r=>r.id!==id);renderRicami();fillRicamoSelect();toast('Eliminato');}catch(e){}}
+
+// ── IMPORTA PREZZI PROGRAMMI RICAMO DA EXCEL ────────────────────────────────
+// Estrae un codice normalizzato tipo "UNIFORM11B" da un testo (nome programma o descrizione fattura)
+function extractImpiantoCode(raw){
+  if(!raw)return null;
+  const s=raw.toString().toUpperCase();
+  const m=s.match(/UNIFORM\s*N?\.?\s*(\d+)([A-Z])?/);
+  if(!m)return null;
+  return 'UNIFORM'+m[1]+(m[2]||'');
+}
+function parsePrezzoImp(v){
+  if(v===''||v===null||v===undefined)return null;
+  const n=parseFloat(v.toString().replace(',','.').replace(/[^\d.]/g,''));
+  return isNaN(n)?null:n;
+}
+let ricamiImportState={toUpdate:[],conflicts:[],newImpianti:[]};
+
+function openImportRicami(){
+  ricamiImportState={toUpdate:[],conflicts:[],newImpianti:[]};
+  $('imp-ric-step1').style.display='block';
+  $('imp-ric-results').style.display='none';
+  $('imp-ric-results').innerHTML='';
+  $('imp-ric-summary').textContent='';
+  $('imp-ric-confirm-btn').style.display='none';
+  $('modal-import-ricami').style.display='flex';
+}
+
+async function handleImportRicamiFile(e){
+  const file=e.target.files[0];if(!file)return;e.target.value='';
+  const XLSXlib=window.XLSX;
+  if(!XLSXlib){toast('Libreria Excel non caricata');return;}
+  $('imp-ric-loading').style.display='block';
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSXlib.read(buf,{type:'array'});
+    // Preferisci un foglio che sembri contenere i dati (nome con "dati" o "fattura" o "prezz"), altrimenti il primo
+    let sheetName=wb.SheetNames.find(n=>/dati|fattura|prezz/i.test(n))||wb.SheetNames[0];
+    const ws=wb.Sheets[sheetName];
+    const rows=XLSXlib.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(!rows.length){toast('File vuoto');$('imp-ric-loading').style.display='none';return;}
+
+    // Trova riga intestazioni con Descrizione / Prezzo / Tipologia / Scuola
+    let hdrIdx=-1,descCol=-1,prezzoCol=-1,tipoCol=-1,scuolaCol=-1;
+    for(let i=0;i<Math.min(5,rows.length);i++){
+      const row=rows[i].map(c=>(c||'').toString().toUpperCase().trim());
+      const di=row.findIndex(c=>c.startsWith('DESCRIZ'));
+      const pi=row.findIndex(c=>c.startsWith('PREZZ'));
+      if(di>=0&&pi>=0){
+        hdrIdx=i;descCol=di;prezzoCol=pi;
+        tipoCol=row.findIndex(c=>c.startsWith('TIPOLO')||c.startsWith('TIPOLG')||c.startsWith('TIPO'));
+        scuolaCol=row.findIndex(c=>c.startsWith('SCUOLA'));
+        break;
+      }
+    }
+    if(hdrIdx===-1){toast('Non trovo le colonne "Descrizione" e "Prezzo" nel file');$('imp-ric-loading').style.display='none';return;}
+
+    const impRows=[];
+    for(let i=hdrIdx+1;i<rows.length;i++){
+      const row=rows[i];if(!row)continue;
+      const desc=(row[descCol]||'').toString().trim();
+      if(!desc)continue;
+      const prezzo=parsePrezzoImp(row[prezzoCol]);
+      if(prezzo===null)continue;
+      const tipo=tipoCol>=0?(row[tipoCol]||'').toString().trim():'';
+      // Se c'è una colonna Tipologia, tieni solo le righe "Impianto"; se non c'è, tieni tutto
+      if(tipoCol>=0&&tipo&&!/IMPIANT/i.test(tipo))continue;
+      const scuola=scuolaCol>=0?(row[scuolaCol]||'').toString().trim():'';
+      const code=extractImpiantoCode(desc);
+      if(!code)continue;
+      impRows.push({desc,prezzo,scuola:(scuola&&scuola!=='-')?scuola:'',code});
+    }
+    if(!impRows.length){toast('Nessuna riga "Impianto" trovata nel file');$('imp-ric-loading').style.display='none';return;}
+
+    // Raggruppa per codice → rileva conflitti di prezzo
+    const byCode={};
+    impRows.forEach(r=>{(byCode[r.code]=byCode[r.code]||[]).push(r);});
+
+    // Codici già presenti tra i programmi ricamo esistenti
+    const ricamoByCode={};
+    ricami.forEach(r=>{const c=extractImpiantoCode(r.name);if(c&&!ricamoByCode[c])ricamoByCode[c]=r;});
+
+    const toUpdate=[],conflicts=[],newImpianti=[];
+    Object.keys(byCode).forEach(code=>{
+      const variants=byCode[code];
+      const distinctPrices=[...new Set(variants.map(v=>v.prezzo))];
+      const existing=ricamoByCode[code];
+      if(existing){
+        if(distinctPrices.length===1){
+          const newPrice=distinctPrices[0];
+          const curPrice=parsePrezzoImp(existing.price);
+          if(curPrice===null||Math.abs(curPrice-newPrice)>0.001){
+            toUpdate.push({ricamo:existing,code,newPrice,scuola:variants[0].scuola,desc:variants[0].desc});
+          }
+        } else {
+          conflicts.push({ricamo:existing,code,variants});
+        }
+      } else {
+        // Non presente in app — un'opzione per variante di prezzo distinta
+        distinctPrices.forEach(p=>{
+          const v=variants.find(x=>x.prezzo===p);
+          newImpianti.push({code,prezzo:p,scuola:v.scuola,desc:v.desc});
+        });
+      }
+    });
+
+    toUpdate.sort((a,b)=>a.code.localeCompare(b.code));
+    conflicts.sort((a,b)=>a.code.localeCompare(b.code));
+    newImpianti.sort((a,b)=>a.code.localeCompare(b.code));
+
+    ricamiImportState={toUpdate,conflicts,newImpianti};
+    renderRicamiImportResults();
+  }catch(err){
+    toast('Errore lettura file: '+err.message);
+  }
+  $('imp-ric-loading').style.display='none';
+}
+
+function renderRicamiImportResults(){
+  const {toUpdate,conflicts,newImpianti}=ricamiImportState;
+  const c=$('imp-ric-results');
+  let html='';
+
+  if(toUpdate.length){
+    html+=`<h3 style="font-size:13px;margin:14px 0 8px">✅ Aggiornamenti prezzo trovati (${toUpdate.length})</h3>
+    <table><thead><tr><th style="width:26px"></th><th>Codice</th><th>Scuola</th><th>Prezzo attuale</th><th>Nuovo prezzo</th></tr></thead><tbody>
+    ${toUpdate.map((u,i)=>`<tr>
+      <td><input type="checkbox" id="imp-upd-${i}" checked></td>
+      <td style="font-weight:700">${u.code}<div style="font-size:11px;color:var(--txt2);font-weight:400">${u.ricamo.name}</div></td>
+      <td>${u.ricamo.school||u.scuola||'—'}</td>
+      <td>${u.ricamo.price?'€ '+u.ricamo.price:'—'}</td>
+      <td><input type="number" step="0.01" min="0" id="imp-upd-price-${i}" value="${u.newPrice}" style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  if(conflicts.length){
+    html+=`<h3 style="font-size:13px;margin:18px 0 8px">⚠️ Da verificare — più prezzi diversi nel file per lo stesso codice (${conflicts.length})</h3>
+    <table><thead><tr><th style="width:26px"></th><th>Codice</th><th>Prezzo attuale</th><th>Scegli il prezzo da applicare</th></tr></thead><tbody>
+    ${conflicts.map((cf,i)=>`<tr>
+      <td><input type="checkbox" id="imp-cfl-${i}"></td>
+      <td style="font-weight:700">${cf.code}<div style="font-size:11px;color:var(--txt2);font-weight:400">${cf.ricamo.name}</div></td>
+      <td>${cf.ricamo.price?'€ '+cf.ricamo.price:'—'}</td>
+      <td><select id="imp-cfl-price-${i}" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit;max-width:320px">
+        ${cf.variants.map(v=>`<option value="${v.prezzo}">€ ${v.prezzo} — ${v.desc}</option>`).join('')}
+      </select></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  if(newImpianti.length){
+    html+=`<h3 style="font-size:13px;margin:18px 0 8px">🆕 Impianti nel file non ancora presenti in Programmi Ricamo (${newImpianti.length})</h3>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Non vengono creati automaticamente. Spunta quelli che vuoi aggiungere come nuovi programmi ricamo.</div>
+    <table><thead><tr><th style="width:26px"></th><th>Codice</th><th>Scuola</th><th>Prezzo</th><th>Descrizione file</th></tr></thead><tbody>
+    ${newImpianti.map((n,i)=>`<tr>
+      <td><input type="checkbox" id="imp-new-${i}"></td>
+      <td style="font-weight:700">${n.code}</td>
+      <td>${n.scuola||'—'}</td>
+      <td>€ ${n.prezzo}</td>
+      <td style="font-size:12px;color:var(--txt2)">${n.desc}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  if(!toUpdate.length&&!conflicts.length&&!newImpianti.length){
+    html='<div class="empty-msg">Nessuna riga "Impianto" utile trovata nel file, oppure tutti i prezzi sono già allineati.</div>';
+  }
+
+  c.innerHTML=html;
+  c.style.display='block';
+  $('imp-ric-step1').style.display='none';
+  $('imp-ric-summary').textContent=`${toUpdate.length} aggiornamenti proposti · ${conflicts.length} da verificare · ${newImpianti.length} non presenti in app`;
+  $('imp-ric-confirm-btn').style.display=(toUpdate.length||conflicts.length||newImpianti.length)?'inline-flex':'none';
+}
+
+async function applyRicamiImport(){
+  const {toUpdate,conflicts,newImpianti}=ricamiImportState;
+  const btn=$('imp-ric-confirm-btn');btn.disabled=true;btn.textContent='Salvataggio…';
+  let updated=0,created=0,errors=0;
+
+  for(let i=0;i<toUpdate.length;i++){
+    const cb=$('imp-upd-'+i);if(!cb||!cb.checked)continue;
+    const u=toUpdate[i];
+    const priceInput=$('imp-upd-price-'+i);
+    const newPrice=priceInput?priceInput.value:u.newPrice;
+    const r=ricami.find(x=>x.id===u.ricamo.id);if(!r)continue;
+    r.price=newPrice;
+    if(!r.school&&u.scuola)r.school=u.scuola;
+    try{await upsert('ricami',r.id,r);updated++;}catch(e){errors++;}
+  }
+
+  for(let i=0;i<conflicts.length;i++){
+    const cb=$('imp-cfl-'+i);if(!cb||!cb.checked)continue;
+    const cf=conflicts[i];
+    const sel=$('imp-cfl-price-'+i);
+    const newPrice=sel?sel.value:null;
+    if(newPrice===null)continue;
+    const r=ricami.find(x=>x.id===cf.ricamo.id);if(!r)continue;
+    r.price=newPrice;
+    try{await upsert('ricami',r.id,r);updated++;}catch(e){errors++;}
+  }
+
+  for(let i=0;i<newImpianti.length;i++){
+    const cb=$('imp-new-'+i);if(!cb||!cb.checked)continue;
+    const n=newImpianti[i];
+    const r={id:'r'+Date.now()+Math.random().toString(36).slice(2,6),name:n.code,school:n.scuola||'',colors:'',notes:'Importato da Excel Ricamificio Ferrara',price:String(n.prezzo),img:null,fileData:null,fileName:null};
+    ricami.push(r);
+    try{await upsert('ricami',r.id,r);created++;}catch(e){errors++;}
+  }
+
+  btn.disabled=false;btn.textContent='Conferma importazione';
+  renderRicami();fillRicamoSelect();
+  CM('modal-import-ricami');
+  toast(`✅ Importazione completata — ${updated} prezzi aggiornati, ${created} nuovi programmi creati`+(errors?`, ${errors} errori`:''));
+}
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
 function fillStatusSelects(){
