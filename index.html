@@ -110,6 +110,8 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
 .gallery-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.35);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
 .gallery-nav.prev{left:8px;}.gallery-nav.next{right:8px;}
 .gallery-del{position:absolute;top:6px;right:6px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+.gallery-dl{position:absolute;top:6px;right:34px;background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+.gallery-dl:hover{background:rgba(37,99,235,.85);}
 
 /* Drop zone */
 .dropzone{border:2px dashed var(--border);border-radius:var(--r);padding:20px;text-align:center;color:var(--txt2);font-size:12px;cursor:pointer;transition:border-color .2s,background .2s;position:relative;}
@@ -431,6 +433,7 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
               <img class="gallery-main" id="pd-gallery-main" style="display:none" src="" alt="">
               <button class="gallery-nav prev" id="pd-prev" onclick="galleryNav(-1)" style="display:none">‹</button>
               <button class="gallery-nav next" id="pd-next" onclick="galleryNav(1)" style="display:none">›</button>
+              <button class="gallery-dl" id="pd-dl-img" onclick="downloadCurrentImg()" style="display:none" title="Scarica foto">⬇</button>
               <button class="gallery-del" id="pd-del-img" onclick="deleteCurrentImg()" style="display:none" title="Elimina foto">×</button>
             </div>
             <div class="gallery-thumbs" id="pd-thumbs"></div>
@@ -440,6 +443,7 @@ tr.click:hover td{background:var(--bg2);cursor:pointer;}
                 <div style="font-size:11px;margin-top:3px;color:var(--txt3)">Fino a 4 immagini (JPG/PNG)</div>
                 <input type="file" accept="image/*" multiple onchange="handleGalleryUpload(event)">
               </div>
+              <button class="btn btn-sm" id="pd-dl-all-btn" style="width:100%;margin-top:8px;display:none" onclick="downloadAllImages()">⬇ Scarica tutte le foto</button>
             </div>
           </div>
           <div class="pdm">
@@ -1358,16 +1362,19 @@ function renderGallery(p){
   const imgs=p.images||[];
   galleryIndex=Math.min(galleryIndex,Math.max(0,imgs.length-1));
   const main=$('pd-gallery-main'),ph=$('pd-gallery-ph');
-  const prev=$('pd-prev'),next=$('pd-next'),delBtn=$('pd-del-img');
+  const prev=$('pd-prev'),next=$('pd-next'),delBtn=$('pd-del-img'),dlBtn=$('pd-dl-img'),dlAllBtn=$('pd-dl-all-btn');
   if(imgs.length>0){
     main.src=imgs[galleryIndex];main.style.display='block';ph.style.display='none';
     prev.style.display=imgs.length>1?'flex':'none';
     next.style.display=imgs.length>1?'flex':'none';
     delBtn.style.display='flex';
+    if(dlBtn)dlBtn.style.display='flex';
   } else {
     main.style.display='none';ph.style.display='flex';
     prev.style.display='none';next.style.display='none';delBtn.style.display='none';
+    if(dlBtn)dlBtn.style.display='none';
   }
+  if(dlAllBtn)dlAllBtn.style.display=imgs.length>1?'block':'none';
   const thumbs=$('pd-thumbs');
   thumbs.innerHTML=imgs.map((img,i)=>`<img class="gallery-thumb ${i===galleryIndex?'active':''}" src="${img}" onclick="gallerySelect(${i})" draggable="true" data-idx="${i}" title="Trascina per riordinare">`).join('');
   if(imgs.length<4){thumbs.innerHTML+=`<label class="gallery-add" title="Aggiungi foto">+<input type="file" accept="image/*" multiple style="display:none" onchange="handleGalleryUpload(event)"></label>`;}
@@ -1401,6 +1408,42 @@ async function deleteCurrentImg(){
   p.images.splice(galleryIndex,1);
   galleryIndex=Math.max(0,galleryIndex-1);
   try{await upsert('products',p.id,p);renderGallery(p);toast('Foto eliminata');}catch(e){}
+}
+// Scarica un'immagine (data: URL o URL Supabase Storage) forzando il salvataggio con un nome leggibile
+async function downloadImageUrl(src,baseName){
+  if(!src)return;
+  if(src.startsWith('data:')){
+    const ext=(src.match(/data:image\/(\w+)/)||[])[1]||'jpg';
+    const a=document.createElement('a');a.href=src;a.download=`${baseName}.${ext}`;a.click();
+    return;
+  }
+  try{
+    const res=await fetch(src);
+    if(!res.ok)throw new Error('fetch failed');
+    const blob=await res.blob();
+    const ext=((blob.type.split('/')[1]||'jpg').split('+')[0])||'jpg';
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`${baseName}.${ext}`;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }catch(e){
+    // CORS o rete: apri in una nuova scheda così l'utente può salvare manualmente (tasto destro → Salva immagine)
+    window.open(src,'_blank');
+    toast('Immagine aperta in una nuova scheda — tasto destro → "Salva immagine con nome" per scaricarla');
+  }
+}
+function downloadCurrentImg(){
+  const p=products.find(x=>x.id===currentProdId);if(!p||!p.images||!p.images.length)return;
+  const src=p.images[galleryIndex];
+  const base=(p.article||p.code||p.desc||'prodotto').toString().replace(/[^a-zA-Z0-9_-]+/g,'_').slice(0,40);
+  downloadImageUrl(src,`${base}_${galleryIndex+1}`);
+}
+async function downloadAllImages(){
+  const p=products.find(x=>x.id===currentProdId);if(!p||!p.images||!p.images.length){toast('Nessuna foto da scaricare');return;}
+  const base=(p.article||p.code||p.desc||'prodotto').toString().replace(/[^a-zA-Z0-9_-]+/g,'_').slice(0,40);
+  for(let i=0;i<p.images.length;i++){
+    await downloadImageUrl(p.images[i],`${base}_${i+1}`);
+    if(i<p.images.length-1)await new Promise(r=>setTimeout(r,350));
+  }
 }
 async function handleGalleryUpload(e){
   const files=Array.from(e.target.files);
@@ -2528,6 +2571,9 @@ async function exportRicamatore(){
 // ── LOGO IMAGES ───────────────────────────────────────────────────────────────
 let pendingModalLogos = []; // logos being added in modal
 
+function downloadLogo(src,idx){
+  downloadImageUrl(src,`logo_${idx+1}`);
+}
 function renderLogosGrid(p, containerId){
   const c=document.getElementById(containerId);
   if(!c)return;
@@ -2535,6 +2581,7 @@ function renderLogosGrid(p, containerId){
   c.innerHTML=logos.map((img,i)=>`
     <div style="position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:var(--bg2)">
       <img src="${img}" style="width:100%;height:90px;object-fit:contain;display:block;background:var(--bg2)">
+      <button onclick='downloadLogo(${JSON.stringify(img)},${i})' style="position:absolute;top:3px;right:27px;background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1" title="Scarica logo">⬇</button>
       <button onclick="removeLogo('${p.id}',${i})" style="position:absolute;top:3px;right:3px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
     </div>`).join('');
 }
@@ -2545,6 +2592,7 @@ function renderModalLogosGrid(logos){
   c.innerHTML=logos.map((img,i)=>`
     <div style="position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:var(--bg2)">
       <img src="${img}" style="width:100%;height:70px;object-fit:contain;display:block;background:var(--bg2)">
+      <button onclick='downloadLogo(${JSON.stringify(img)},${i})' style="position:absolute;top:2px;right:24px;background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1" title="Scarica logo">⬇</button>
       <button onclick="removeModalLogo(${i})" style="position:absolute;top:2px;right:2px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
     </div>`).join('');
 }
