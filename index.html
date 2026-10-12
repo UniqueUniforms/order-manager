@@ -1275,6 +1275,12 @@ function renderOrdProds(o){
         <thead><tr><th style="text-align:left">Articolo</th>${used.map(s=>`<th>${s}</th>`).join('')}<th>Tot</th></tr></thead>
         <tbody><tr><td class="lc">${p.article||'—'} ${p.color||''}</td>${used.map(s=>`<td>${+sz[s]||0}</td>`).join('')}<td class="tc">${tot}</td></tr></tbody>
       </table></div>
+      ${(pr.customizations&&pr.customizations.filter(c=>c.name||c.number).length)?`<div style="padding:10px 14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🔢 Personalizzazioni (${pr.customizations.filter(c=>c.name||c.number).length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${pr.customizations.filter(c=>c.name||c.number).map(c=>`<span class="chip">${c.name||'—'}${c.number?' · n° '+c.number:''}${c.size?' · '+c.size:''}</span>`).join('')}
+        </div>
+      </div>`:''}
       ${p.custom||codes.length?`<div style="padding:10px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--txt2);line-height:2">
         ${p.custom?`<div style="margin-bottom:4px">${p.custom}</div>`:''}
         ${codes.join(' &nbsp;')}
@@ -1295,7 +1301,7 @@ function openEditOrdById(id){
   $('o-school').value=o.school||'';$('o-desc').value=o.desc||'';$('o-pom').value=o.pom||'';
   $('o-sta').value=o.status||'';fillStampatoreSelect('o-dest',o.dest||'');$('o-shipping').value=o.shipping||'';$('o-notes').value=o.notes||'';
   $('o-deadline').value=o.deadline||'';$('o-alert-days').value=o.alertDays||7;
-  orderRows=(o.products||[]).map(p=>({pid:p.pid,sizes:{...p.sizes}}));
+  orderRows=(o.products||[]).map(p=>p.manual?{manual:true,note:p.note}:{pid:p.pid,sizes:{...p.sizes},customizations:(p.customizations||[]).map(c=>({...c})),customOpen:!!(p.customizations&&p.customizations.length)});
   renderOrderRows();$('modal-order').style.display='flex';
 }
 function openNewOrder(){
@@ -1327,6 +1333,7 @@ function renderOrderRows(){
     const p=map[r.pid]||{};
     const availSizes=(p.sizes&&p.sizes.length)?p.sizes:ALL_SIZES;
     const firstImg=getProdImg(p);
+    const custList=r.customizations||[];
     return`<div class="prow" style="flex-direction:column;gap:8px">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
@@ -1338,15 +1345,50 @@ function renderOrderRows(){
       <div style="display:flex;gap:5px;flex-wrap:wrap">
         ${availSizes.map(s=>`<div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:10px;color:var(--txt2)">${s}</span><input type="number" min="0" style="width:38px;text-align:center;padding:4px 2px;border:1px solid var(--border);border-radius:4px;font-family:inherit" value="${r.sizes[s]||0}" onchange="updSz(${i},'${s}',this.value)"></div>`).join('')}
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;border-top:1px solid var(--border);padding-top:8px">
+        <input type="checkbox" ${r.customOpen?'checked':''} onchange="toggleRowCustom(${i},this.checked)"> 🔢 Personalizzazioni (nomi / numeri da stampare o ricamare)
+      </label>
+      ${r.customOpen?`<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:8px">
+        ${custList.map((c,ci)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <input type="text" placeholder="Nome" value="${c.name||''}" oninput="updCustomField(${i},${ci},'name',this.value)" style="flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:12px">
+          <input type="text" placeholder="Numero" value="${c.number||''}" oninput="updCustomField(${i},${ci},'number',this.value)" style="width:70px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:12px">
+          <select onchange="updCustomField(${i},${ci},'size',this.value)" style="width:80px;padding:5px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:12px">
+            <option value="">Taglia</option>
+            ${availSizes.map(s=>`<option value="${s}" ${c.size===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+          <button class="xbtn" style="font-size:16px" onclick="rmCustomRow(${i},${ci})">×</button>
+        </div>`).join('')}
+        <button class="btn btn-sm" onclick="addCustomRow(${i})">+ Aggiungi nome</button>
+      </div>`:''}
     </div>`;
   }).join('');
 }
 function updSz(i,s,v){orderRows[i].sizes[s]=+v||0;}
 function rmRow(i){orderRows.splice(i,1);renderOrderRows();}
+function toggleRowCustom(i,open){
+  orderRows[i].customOpen=open;
+  if(open&&(!orderRows[i].customizations||!orderRows[i].customizations.length)){
+    orderRows[i].customizations=[{name:'',number:'',size:''}];
+  }
+  renderOrderRows();
+}
+function addCustomRow(i){
+  if(!orderRows[i].customizations)orderRows[i].customizations=[];
+  orderRows[i].customizations.push({name:'',number:'',size:''});
+  renderOrderRows();
+}
+function updCustomField(i,ci,field,val){
+  if(!orderRows[i].customizations)return;
+  orderRows[i].customizations[ci][field]=val;
+}
+function rmCustomRow(i,ci){
+  orderRows[i].customizations.splice(ci,1);
+  renderOrderRows();
+}
 async function saveOrder(){
   const gv=id=>$(id)?.value||'';
   if(!gv('o-sup')||!gv('o-school')){alert('Compila fornitore e cliente');return;}
-  const prods=orderRows.map(r=>r.manual?{manual:true,note:r.note,sizes:{}}:{pid:r.pid,sizes:Object.fromEntries(Object.entries(r.sizes).filter(([,v])=>v>0))});
+  const prods=orderRows.map(r=>r.manual?{manual:true,note:r.note,sizes:{}}:{pid:r.pid,sizes:Object.fromEntries(Object.entries(r.sizes).filter(([,v])=>v>0)),customizations:(r.customizations||[]).filter(c=>(c.name&&c.name.trim())||(c.number&&c.number.trim())).map(c=>({name:(c.name||'').trim(),number:(c.number||'').trim(),size:c.size||''}))});
   if(editingOrdId){
     const o=orders.find(x=>x.id===editingOrdId);if(!o)return;
     Object.assign(o,{date:gv('o-date'),num:gv('o-num'),supplier:gv('o-sup'),school:gv('o-school'),desc:gv('o-desc'),pom:gv('o-pom'),status:gv('o-sta'),dest:gv('o-dest'),shipping:gv('o-shipping'),notes:gv('o-notes'),deadline:gv('o-deadline')||null,alertDays:+gv('o-alert-days')||7,products:prods});
@@ -2046,6 +2088,22 @@ function genXLSX(o){
   const wb=XLSX.utils.book_new();
   const sn=(o.school||'Ordine').replace(/[^a-zA-Z0-9_ ]/g,'').slice(0,28)||'Ordine';
   XLSX.utils.book_append_sheet(wb,ws1,sn);XLSX.utils.book_append_sheet(wb,ws2,'Personalizzazioni');
+  // Foglio Nomi e Numeri — solo se l'ordine ha almeno una personalizzazione nome/numero
+  const custRows=[[`NOMI E NUMERI — ${o.school}`],[],['Prodotto','Articolo','Taglia','Nome','Numero']];
+  let anyCust=false;
+  for(const pr of(o.products||[])){
+    const p=map[pr.pid]||{};
+    (pr.customizations||[]).forEach(c=>{
+      if(!c.name&&!c.number)return;
+      anyCust=true;
+      custRows.push([p.desc||'—',[p.article,p.color].filter(Boolean).join(' ')||'—',c.size||'—',c.name||'—',c.number||'—']);
+    });
+  }
+  if(anyCust){
+    const ws3=XLSX.utils.aoa_to_sheet(custRows);
+    ws3['!cols']=[{wch:32},{wch:20},{wch:10},{wch:22},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,ws3,'Nomi e Numeri');
+  }
   XLSX.writeFile(wb,`ordine_${sn.replace(/ /g,'_')}_${(o.date||'').replace(/-/g,'')}.xlsx`);
   CM('modal-export');toast('📥 File Excel scaricato');
 }
@@ -2514,6 +2572,13 @@ async function exportRicamatore(){
       htm+=`</tbody></table>`;
       htm+=`<table class="st"><thead><tr><th class="l">Articolo</th>${prodSizes.map(s=>`<th>${s}</th>`).join('')}<th>TOT</th></tr></thead>`;
       htm+=`<tbody><tr><td class="art">${p.article||''} ${p.color||''}</td>${prodSizes.map(s=>`<td>${+sz[s]||''}</td>`).join('')}<td class="tot">${tot}</td></tr></tbody></table>`;
+      const validCust=(pr.customizations||[]).filter(c=>c.name||c.number);
+      if(validCust.length){
+        htm+=`<div class="sep" style="text-align:left;padding:6px 8px;background:#FEF3C7;color:#92400E;border-bottom:none">🔢 NOMI / NUMERI DA PERSONALIZZARE (${validCust.length})</div>`;
+        htm+=`<table class="st"><thead><tr><th class="l">Nome</th><th>Numero</th><th>Taglia</th></tr></thead><tbody>`;
+        validCust.forEach(c=>{htm+=`<tr><td class="art">${c.name||'—'}</td><td>${c.number||'—'}</td><td>${c.size||'—'}</td></tr>`;});
+        htm+=`</tbody></table>`;
+      }
       htm+=`<div class="note-prod-label">📝 NOTE INTERNE (CLICCA PER SCRIVERE):</div>`;
       htm+=`<div class="note-prod-editable" contenteditable="true" style="min-height:50px;cursor:text;">Clicca qui per aggiungere note interne su questo articolo...</div>`;
       htm+=`</div>`;
